@@ -12,7 +12,7 @@ from setuptools import setup
 packages = []
 thisPackage = "rcsb.utils.repository"
 
-with open("rcsb/utils/reposiroty/__init__.py", "r") as fd:
+with open("rcsb/utils/repository/__init__.py", "r") as fd:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', fd.read(), re.MULTILINE).group(1)
 
 if not version:
