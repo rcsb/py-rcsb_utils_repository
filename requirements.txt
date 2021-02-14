@@ -1,0 +1,4 @@
+mmcif <= 0.66
+rcsb.utils.io >= 0.99
+rcsb.utils.multiproc >= 0.18
+rcsb.utils.validation >= 0.22
