@@ -67,7 +67,7 @@ class RepositoryProvider(object):
         #
         self.__mpFormat = "[%(levelname)s] %(asctime)s %(processName)s-%(module)s.%(funcName)s: %(message)s"
 
-    def getLocatorObjList(self, contentType, inputPathList=None, mergeContentTypes=None):
+    def getLocatorObjList(self, contentType, inputPathList=None, mergeContentTypes=None, excludeIds=None):
         """Convenience method to get the data path list for the input repository content type.
 
         Args:
@@ -75,6 +75,7 @@ class RepositoryProvider(object):
             inputPathList (list, optional): path list that will be returned if provided.
             mergeContentTypes (list, optional): repository content types to combined with the
                                 primary content type.
+            excludeIds (list or dict): exclude any locators for idCodes in this list or dictionary
 
         Returns:
             Obj list: data file paths or tuple of file paths
@@ -90,6 +91,21 @@ class RepositoryProvider(object):
             locatorList = self.getEntryLocatorObjList(mergeContentTypes=mergeContentTypes)
         else:
             locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList)
+        #
+        if excludeIds:
+            fL = []
+            for locator in locatorList:
+                if isinstance(locator, str):
+                    pth = locator
+                else:
+                    pth = locator[0]["locator"]
+                #
+                idCode = self.__getIdcodeFromLocatorPath(contentType, pth)
+                if idCode in excludeIds:
+                    continue
+                fL.append(locator)
+            locatorList = fL
+
         return locatorList
 
     def getLocatorObjListWithInput(self, contentType, inputPathList=None, mergeContentTypes=None):
@@ -197,6 +213,17 @@ class RepositoryProvider(object):
         #
         return rL
 
+    def getLocatorIdcodes(self, contentType, locatorObjList, locatorIndex=0):
+        try:
+
+            if locatorObjList and isinstance(locatorObjList[0], str):
+                return [self.__getIdcodeFromLocatorPath(contentType, pth) for pth in locatorObjList]
+            else:
+                return [self.__getIdcodeFromLocatorPath(contentType, locatorObj[locatorIndex]["locator"]) for locatorObj in locatorObjList]
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return []
+
     def getLocatorPaths(self, locatorObjList, locatorIndex=0):
         try:
             if locatorObjList and isinstance(locatorObjList[0], str):
@@ -269,6 +296,28 @@ class RepositoryProvider(object):
         if checkExists:
             pth = pth if self.__mU.exists(pth) else None
         return pth
+
+    def __getIdcodeFromLocatorPath(self, contentType, pth):
+        """Convenience method to return the idcode from the locator path."""
+        idCode = None
+        try:
+            bn = os.path.basename(pth)
+            if contentType in ["pdbx", "pdbx_core", "bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
+                idCode = bn.split(".")[0]
+            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                tC = bn.split(".")[0]
+                idCode = "_".join(tC.split("_")[:2])
+            elif contentType in ["pdb_distro", "da_internal", "status_history"]:
+                idCode = None
+            elif contentType in ["vrpt"]:
+                tC = bn.split(".")[0]
+                idCode = tC.split("_")[0]
+            else:
+                logger.warning("Unsupported contentType %s", contentType)
+            idCode = idCode.upper() if idCode else None
+        except Exception as e:
+            logger.exception("Failing for %r %r with %s", contentType, pth, str(e))
+        return idCode
 
     def __getRepoTopPath(self, contentType):
         """Convenience method to return repository top path from configuration data."""

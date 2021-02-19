@@ -69,6 +69,24 @@ class RepositoryProviderTests(unittest.TestCase):
             logger.info("%s pathList length %d", contentType, len(pathList))
             self.assertEqual(len(locatorObjList), len(pathList))
             self.assertEqual(len(locatorObjList), len(locatorObjList2))
+            #
+        for contentType in ["bird_chem_comp_core", "pdbx_core", "ihm_dev"]:
+            mergeContentTypes = None
+            if contentType in ["pdbx_core"]:
+                mergeContentTypes = ["vrpt"]
+            #
+            locatorObjList = self.__rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            pathList = self.__rpP.getLocatorPaths(locatorObjList)
+            self.assertEqual(len(locatorObjList), len(pathList))
+            #
+            lCount = len(pathList)
+            idCodes = self.__rpP.getLocatorIdcodes(contentType, locatorObjList)
+            self.assertEqual(len(locatorObjList), len(idCodes))
+            excludeList = idCodes[: int(len(idCodes) / 2)]
+            logger.debug("excludeList (%d) %r", len(excludeList), excludeList)
+            fL = self.__rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes, excludeIds=excludeList)
+            logger.debug("fL (%d)", len(fL))
+            self.assertEqual(lCount, len(fL) + len(excludeList))
 
 
 def repoSuite():
