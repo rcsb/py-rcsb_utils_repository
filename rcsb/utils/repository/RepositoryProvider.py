@@ -637,8 +637,9 @@ class RepositoryProvider(object):
                 _, fn = os.path.split(ccPath)
                 ccId, _ = os.path.splitext(fn)
                 ccPathD[ccId] = ccPath
-            logger.debug("ccPathD length %d", len(ccPathD))
+            logger.info("Chemical component path list (%d)", len(ccPathD))
             pthL = self.__getLocatorList("bird")
+            logger.info("BIRD path list (%d)", len(pthL))
             for pth in pthL:
                 containerL = self.__mU.doImport(pth, fmt="mmcif")
                 for container in containerL:
@@ -664,7 +665,7 @@ class RepositoryProvider(object):
                                 logger.error("Bad ccId %r for BIRD %r", ccId, prdId)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
-
+        logger.info("Candidate Chemical Components (%d) BIRDS (%d) BIRD status details (%d)", len(prdD), len(ccPathD), len(prdStatusD))
         return prdD, ccPathD, prdStatusD
 
     # -
@@ -695,7 +696,7 @@ class RepositoryProvider(object):
                 prdId, _ = os.path.splitext(fn)
                 birdPathD[prdId] = birdPath
             #
-            logger.debug("BIRD data length %d", len(birdPathD))
+            logger.info("BIRD path length %d", len(birdPathD))
             logger.debug("BIRD keys %r", list(birdPathD.keys()))
             birdCcPathList = self.__getLocatorList("bird_chem_comp")
             birdCcPathD = {}
@@ -705,15 +706,16 @@ class RepositoryProvider(object):
                 prdId = "PRD_" + prdCcId[6:]
                 birdCcPathD[prdId] = birdCcPath
             #
-            logger.debug("BIRD CC data length %d", len(birdCcPathD))
+            logger.info("BIRDCC path length %d", len(birdCcPathD))
             logger.debug("BIRD CC keys %r", list(birdCcPathD.keys()))
             fD = self.__buildFamilyIndex()
-            logger.debug("Family index length %d", len(fD))
+            logger.info("BIRD Family index length %d", len(fD))
             logger.debug("Family index keys %r", list(fD.keys()))
-            logger.debug("PRD to CCD small mol index length %d", len(prdSmallMolCcD))
+            logger.info("PRD to CCD small mol index length %d", len(prdSmallMolCcD))
             #
             for prdId in birdPathD:
                 if prdId in prdStatusD and prdStatusD[prdId] != "REL":
+                    logger.info("Skipping BIRD with non-REL status %s", prdId)
                     continue
                 fp = os.path.join(self.__cachePath, prdId + ".cif")
                 logger.debug("Export cache path is %r", fp)
@@ -758,6 +760,7 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         #
+        logger.info("Merged BIRD/Family/CC path length %d", len(outPathList))
         return outPathList
         #
 
