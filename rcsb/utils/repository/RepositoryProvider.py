@@ -20,11 +20,9 @@
 #   27-Aug-2019  jdw filter missing validation reports
 #   16-Sep-2019  jdw consolidate chem_comp_core with bird_chem_comp_core
 #   14-Feb-2020  jdw migrate to rcsb.utils.repository
-#
-#
 ##
 """
- Utilites for scanning and accessing data in common repository file systems.
+ Utilities for scanning and accessing data in common repository file systems.
 
 """
 __docformat__ = "restructuredtext en"
@@ -713,9 +711,11 @@ class RepositoryProvider(object):
             logger.debug("Family index keys %r", list(fD.keys()))
             logger.info("PRD to CCD small mol index length %d", len(prdSmallMolCcD))
             #
+            iSkip = 0
             for prdId in birdPathD:
                 if prdId in prdStatusD and prdStatusD[prdId] != "REL":
-                    logger.info("Skipping BIRD with non-REL status %s", prdId)
+                    logger.debug("Skipping BIRD with non-REL status %s", prdId)
+                    iSkip += 1
                     continue
                 fp = os.path.join(self.__cachePath, prdId + ".cif")
                 logger.debug("Export cache path is %r", fp)
@@ -760,7 +760,7 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         #
-        logger.info("Merged BIRD/Family/CC path length %d", len(outPathList))
+        logger.info("Merged BIRD/Family/CC path length %d (skipped non-released %d)", len(outPathList), iSkip)
         return outPathList
         #
 
