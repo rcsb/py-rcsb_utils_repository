@@ -41,8 +41,8 @@ setup(
     entry_points={},
     dependency_links=[],
     install_requires=[
-        "mmcif <= 0.66",
-        "rcsb.utils.io >= 0.99",
+        "mmcif >= 0.67",
+        "rcsb.utils.io >= 1.00",
         "rcsb.utils.multiproc >= 0.18",
         "rcsb.utils.validation >= 0.22",
     ],
