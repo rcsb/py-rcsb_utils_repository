@@ -21,7 +21,7 @@ if not version:
 setup(
     name=thisPackage,
     version=version,
-    description="RCSB Python Repository Data Mangement Utilities",
+    description="RCSB Python Repository Data Management Utilities",
     long_description="See:  README.md",
     author="John Westbrook",
     author_email="john.westbrook@rcsb.org",
@@ -45,6 +45,7 @@ setup(
         "rcsb.utils.io >= 1.00",
         "rcsb.utils.multiproc >= 0.18",
         "rcsb.utils.validation >= 0.22",
+        "pytz >= 2021.1",
     ],
     packages=find_packages(exclude=["rcsb.mock-data", "rcsb.utils.tests-repository", "rcsb.utils.tests-*", "tests.*"]),
     package_data={

@@ -5,3 +5,4 @@
 15-Apr-2021 - V0.13 Add diagnostics for BIRD/Family/CC integration
 16-Apr-2021 - V0.14 Report unreleased BIRD entries
  5-May-2021 - V0.15 Update dependencies
+20-May-2021 - V0.16 Adding preliminary CurrentHoldings, UnreleasedHoldings and RemovedHoldings provider modules and tests
