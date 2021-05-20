@@ -39,7 +39,7 @@ class CurrentHoldingsProvider(object):
 
     def testCache(self, minCount=170000):
         logger.info("Inventory length cD (%d) id list (%d)", len(self.__invD), len(self.__idD))
-        # TODO - restore consistency checks
+        # JDW - restore consistency checks
         # if len(self.__invD) > minCount and len(self.__idD) > minCount and len(self.__invD) == len(self.__idD):
         if len(self.__invD) > minCount and len(self.__idD) > minCount:
             return True
