@@ -28,6 +28,7 @@ __license__ = "Apache 2.0"
 import collections
 import datetime
 import logging
+import os
 import time
 
 from mmcif.api.DataCategory import DataCategory
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 ScanValue = collections.namedtuple("ScanValue", "containerId, catName, atName, minWidth, maxWidth, minPrec, maxPrec")
 ScanSummary = collections.namedtuple("ScanSummary", "containerId, fromPath, scanDate, scanCategoryDict")
+ChemSummary = collections.namedtuple("ChemSummary", "entryId, releaseDate, ccTup")
 
 
 class ScanRepoUtil(object):
@@ -76,7 +78,16 @@ class ScanRepoUtil(object):
         self.__mU = MarshalUtil(workPath=self.__workPath)
         self.__rpP = RepositoryProvider(self.__cfgOb, numProc=self.__numProc, fileLimit=self.__fileLimit, cachePath=self.__workPath)
 
-    def scanContentType(self, contentType, mergeContentTypes=None, scanType="full", inputPathList=None, scanDataFilePath=None, failedFilePath=None, saveInputFileListPath=None):
+    def scanContentType(
+        self,
+        contentType,
+        mergeContentTypes=None,
+        scanType="full",
+        inputPathList=None,
+        scanDataFilePath=None,
+        failedFilePath=None,
+        saveInputFileListPath=None,
+    ):
         """Driver method for repository scan operation
 
         Args:
@@ -91,6 +102,8 @@ class ScanRepoUtil(object):
             bool: True for success or False otherwise
 
         """
+        ok = False
+        retLists = None
         try:
             startTime = self.__begin(message="scanning operation")
             #
@@ -123,7 +136,7 @@ class ScanRepoUtil(object):
             if subLists:
                 logger.debug("Starting with numProc %d outer subtask count %d subtask length ~ %d", numProc, len(subLists), len(subLists[0]))
             #
-            numResults = 1
+            numResults = 2 if contentType.startswith("pdbx") else 1
             failList = []
             retLists = [[] for ii in range(numResults)]
             diagList = []
@@ -166,12 +179,18 @@ class ScanRepoUtil(object):
                 tscanDataD = self.__mU.doImport(scanDataFilePath, fmt="pickle")
                 ok = tscanDataD == scanDataD
 
+            if scanDataFilePath and contentType.startswith("pdbx") and len(retLists) > 1 and retLists[1]:
+                pth, _ = os.path.split(scanDataFilePath)
+                fp = os.path.join(pth, "chem-comp-release-data.json")
+                ok1 = self.__mU.doExport(fp, retLists[1], fmt="json")
+                ok = ok and ok1
+
             self.__end(startTime, "scanning operation with status " + str(ok))
 
             #
             return ok
         except Exception as e:
-            logger.exception("Failing with %s", str(e))
+            logger.exception("Failing %r with %s", contentType, str(e))
 
         return False
 
@@ -257,20 +276,27 @@ class ScanRepoUtil(object):
             #
             successList = []
             retList = []
+            chmList = []
 
             containerList = self.__getContainerList(dataList)
             for container in containerList:
                 ret = self.__scanContainer(container)
                 successList.append(ret.fromPath)
                 retList.append(ret)
+                if contentType.startswith("pdbx"):
+                    chm = self.__scanChemistry(container)
+                    chmList.append(chm)
             #
 
-            logger.debug("%s scanType %s contentType %spathlist length %d containerList length %d", procName, scanType, contentType, len(dataList), len(containerList))
+            logger.debug("%s scanType %s contentType %s pathlist length %d containerList length %d", procName, scanType, contentType, len(dataList), len(containerList))
 
             ok = len(successList) == len(dataList)
             #
             self.__end(startTime, procName + " with status " + str(ok))
-            return successList, retList, []
+            if contentType.startswith("pdbx"):
+                return successList, retList, chmList, []
+            else:
+                return successList, retList, []
 
         except Exception as e:
             logger.error("Failing with dataList %r", dataList)
@@ -279,7 +305,7 @@ class ScanRepoUtil(object):
         return [], [], []
 
     def __getContainerList(self, locatorObjList):
-        """"""
+        """ """
         utcnow = datetime.datetime.utcnow()
         ts = utcnow.strftime("%Y-%m-%d:%H:%M:%S")
         cL = []
@@ -294,11 +320,43 @@ class ScanRepoUtil(object):
                 cL.append(cA)
         return cL
 
-    def __scanContainer(self, container):
-        """Scan the input container for
+    def __scanChemistry(self, container):
+        """Get release date and the unique list of chemical components in the input container
 
-        Get the file name -
+        Args:
+            container (obj): instance of an mmCIF data container
+
+            loop_
+            _pdbx_audit_revision_history.ordinal
+            _pdbx_audit_revision_history.data_content_type
+            _pdbx_audit_revision_history.major_revision
+            _pdbx_audit_revision_history.minor_revision
+            _pdbx_audit_revision_history.revision_date
+            1 'Structure model' 1 0 1996-12-23
+            2 'Structure model' 1 1 2008-03-24
+            3 'Structure model' 1 2 2011-07-13
         """
+        releaseDate = entryId = None
+        ccS = set()
+        if container.exists("entry"):
+            tObj = container.getObj("entry")
+            entryId = tObj.getValue("id", 0)
+
+        if container.exists("pdbx_audit_revision_history"):
+            tObj = container.getObj("pdbx_audit_revision_history")
+            # Assuming the default sorting order from the release module -
+            releaseDate = tObj.getValue("revision_date", 0)
+        #
+        if container.exists("chem_comp"):
+            cObj = container.getObj("chem_comp")
+            for ii in range(cObj.getRowCount()):
+                ccId = cObj.getValue("id", ii)
+                ccS.add(ccId)
+        ret = ChemSummary(entryId, releaseDate, sorted(ccS))
+        return ret
+
+    def __scanContainer(self, container):
+        """Scan the input container counting attributes and character width ranges and float precision."""
         cName = container.getName()
         loadStatusObj = container.getObj("rcsb_load_status")
         lName = loadStatusObj.getValue(attributeName="name", rowIndex=0)
