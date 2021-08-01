@@ -7,3 +7,4 @@
  5-May-2021 - V0.15 Update dependencies
 20-May-2021 - V0.16 Adding preliminary CurrentHoldings, UnreleasedHoldings and RemovedHoldings provider modules and tests
 31-Jul-2021 - V0.17 Add scan for chemical component release date and update install scripts
+ 1-Aug-2021 - V0.18 Add support scanning and evaluating obsolete entries

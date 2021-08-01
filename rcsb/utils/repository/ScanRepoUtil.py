@@ -91,7 +91,7 @@ class ScanRepoUtil(object):
         """Driver method for repository scan operation
 
         Args:
-            contentType (str):  one of 'bird','bird_family','bird_chem_comp', chem_comp','pdbx'
+            contentType (str):  one of 'bird','bird_family','bird_chem_comp', chem_comp','pdbx', 'pdbx_obsolete'
             scanType (str, optional): 'full' [or 'incr' to be supported]
             inputPathList (list, optional):  list of input file paths to scan
             scanDataFilePath (str, optional): file path for serialized scan data (Pickle format)
@@ -181,7 +181,7 @@ class ScanRepoUtil(object):
 
             if scanDataFilePath and contentType.startswith("pdbx") and len(retLists) > 1 and retLists[1]:
                 pth, _ = os.path.split(scanDataFilePath)
-                fp = os.path.join(pth, "chem-comp-release-data.json")
+                fp = os.path.join(pth, "%s-chem-comp-release-data.json" % contentType)
                 ok1 = self.__mU.doExport(fp, retLists[1], fmt="json")
                 ok = ok and ok1
 

@@ -247,6 +247,8 @@ class RepositoryProvider(object):
                 outputPathList = inputPathList if inputPathList else self.getBirdChemCompPathList()
             elif contentType in ["pdbx", "pdbx_core"]:
                 outputPathList = inputPathList if inputPathList else self.getEntryPathList()
+            elif contentType in ["pdbx_obsolete"]:
+                outputPathList = inputPathList if inputPathList else self.getObsoleteEntryPathList()
             elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
                 outputPathList = inputPathList if inputPathList else self.mergeBirdAndChemCompRefData()
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
@@ -276,7 +278,7 @@ class RepositoryProvider(object):
                 pth = os.path.join(self.__getRepoTopPath(contentType), idCode[0], idCode, idCode + ".cif")
             elif contentType in ["bird_chem_comp"]:
                 pth = os.path.join(self.__getRepoTopPath(contentType), idCode[-1], idCode + ".cif")
-            elif contentType in ["pdbx", "pdbx_core"]:
+            elif contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
                 pth = os.path.join(self.__getRepoTopPath(contentType), idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = os.path.join(self.__getRepoTopPath(contentType), idCode + ".cif")
@@ -300,7 +302,7 @@ class RepositoryProvider(object):
         idCode = None
         try:
             bn = os.path.basename(pth)
-            if contentType in ["pdbx", "pdbx_core", "bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
+            if contentType in ["pdbx", "pdbx_core", "pdbx_obsolete", "bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
                 idCode = bn.split(".")[0]
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 tC = bn.split(".")[0]
@@ -331,6 +333,8 @@ class RepositoryProvider(object):
                 pth = self.__cfgOb.getPath("BIRD_CHEM_COMP_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["pdbx", "pdbx_core"]:
                 pth = self.__cfgOb.getPath("PDBX_REPO_PATH", sectionName=self.__configName)
+            elif contentType in ["pdbx_obsolete"]:
+                pth = self.__cfgOb.getPath("PDBX_OBSOLETE_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = self.__cachePath
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
@@ -469,6 +473,9 @@ class RepositoryProvider(object):
 
     def getEntryPathList(self):
         return self.__getEntryPathList(self.__getRepoTopPath("pdbx"), numProc=self.__numProc)
+
+    def getObsoleteEntryPathList(self):
+        return self.__getEntryPathList(self.__getRepoTopPath("pdbx_obsolete"), numProc=self.__numProc)
 
     def __getEntryPathList(self, topRepoPath, numProc=8):
         """Get the path list for structure entries in the input repository"""
