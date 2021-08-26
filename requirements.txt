@@ -1,5 +1,5 @@
-mmcif >= 0.67
-rcsb.utils.io >= 1.00
+mmcif >= 0.71
+rcsb.utils.io >= 1.19
 rcsb.utils.multiproc >= 0.18
-rcsb.utils.validation >= 0.22
+rcsb.utils.validation >= 0.25
 pytz >= 2021.1
