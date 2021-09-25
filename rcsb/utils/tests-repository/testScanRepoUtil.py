@@ -52,7 +52,7 @@ class ScanRepoUtilTests(unittest.TestCase):
         configPath = os.path.join(mockTopPath, "config", "dbload-setup-example.yml")
         self.__configName = "site_info_configuration"
         self.__cfgOb = ConfigUtil(configPath=configPath, defaultSectionName=self.__configName, mockTopPath=mockTopPath)
-        self.__cachePath = os.path.join(TOPDIR, "CACHE")
+        self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
         self.__pathPdbxDictionary = os.path.join(HERE, "test-data", "mmcif_pdbx_v5_next.dic")
 
         self.__mU = MarshalUtil(workPath=HERE)

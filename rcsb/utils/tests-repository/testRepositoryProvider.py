@@ -41,13 +41,11 @@ class RepositoryProviderTests(unittest.TestCase):
         configPath = os.path.join(mockTopPath, "config", "dbload-setup-example.yml")
         self.__configName = "site_info_configuration"
         self.__cfgOb = ConfigUtil(configPath=configPath, defaultSectionName=self.__configName, mockTopPath=mockTopPath)
-        self.__cachePath = os.path.join(TOPDIR, "CACHE")
+        self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
 
         self.__numProc = 2
         self.__chunkSize = 20
         self.__fileLimit = None
-        #
-        self.__rpP = RepositoryProvider(cfgOb=self.__cfgOb, numProc=self.__numProc, fileLimit=self.__fileLimit, cachePath=self.__cachePath)
         #
         self.__startTime = time.time()
         logger.debug("Starting %s at %s", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
@@ -56,42 +54,95 @@ class RepositoryProviderTests(unittest.TestCase):
         endTime = time.time()
         logger.debug("Completed %s at %s (%.4f seconds)\n", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - self.__startTime)
 
-    def testRepoUtils(self):
-        """Test case - repository locator path utilities"""
+    def testLocalRepoUtils(self):
+        """Test case - repository locator local path utilities"""
+        rpP = RepositoryProvider(cfgOb=self.__cfgOb, discoveryMode="local", numProc=self.__numProc, fileLimit=self.__fileLimit, cachePath=self.__cachePath)
         for contentType in ["bird_chem_comp_core", "pdbx_core", "ihm_dev"]:
             mergeContentTypes = None
             if contentType in ["pdbx_core"]:
                 mergeContentTypes = ["vrpt"]
             #
-            locatorObjList = self.__rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
-            pathList = self.__rpP.getLocatorPaths(locatorObjList)
-            locatorObjList2 = self.__rpP.getLocatorsFromPaths(locatorObjList, pathList)
+            locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            pathList = rpP.getLocatorPaths(locatorObjList)
+            locatorObjList2 = rpP.getLocatorsFromPaths(locatorObjList, pathList)
             logger.info("%s pathList length %d", contentType, len(pathList))
             self.assertEqual(len(locatorObjList), len(pathList))
             self.assertEqual(len(locatorObjList), len(locatorObjList2))
+            if contentType == "pdbx_core":
+                logger.info("pdbx-core locators %d", len(locatorObjList))
+                containerList = rpP.getContainerList(locatorObjList)
+                logger.info("pdbx-core containerList (%d)", len(containerList))
+                self.assertEqual(len(containerList), len(locatorObjList))
+                for container in containerList:
+                    logger.debug("category names - (%d)", len(container.getObjNameList()))
+                    self.assertGreaterEqual(len(container.getObjNameList()), 50)
             #
         for contentType in ["bird_chem_comp_core", "pdbx_core", "ihm_dev"]:
             mergeContentTypes = None
             if contentType in ["pdbx_core"]:
                 mergeContentTypes = ["vrpt"]
             #
-            locatorObjList = self.__rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
-            pathList = self.__rpP.getLocatorPaths(locatorObjList)
+            locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            pathList = rpP.getLocatorPaths(locatorObjList)
             self.assertEqual(len(locatorObjList), len(pathList))
             #
             lCount = len(pathList)
-            idCodes = self.__rpP.getLocatorIdcodes(contentType, locatorObjList)
+            idCodes = rpP.getLocatorIdcodes(contentType, locatorObjList)
             self.assertEqual(len(locatorObjList), len(idCodes))
             excludeList = idCodes[: int(len(idCodes) / 2)]
             logger.debug("excludeList (%d) %r", len(excludeList), excludeList)
-            fL = self.__rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes, excludeIds=excludeList)
+            fL = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes, excludeIds=excludeList)
+            logger.debug("fL (%d)", len(fL))
+            self.assertEqual(lCount, len(fL) + len(excludeList))
+
+    def testRemoteRepoUtils(self):
+        """Test case - repository remote locator uri utilities"""
+        fileLimit = 20
+        rpP = RepositoryProvider(cfgOb=self.__cfgOb, discoveryMode="remote", numProc=self.__numProc, fileLimit=fileLimit, cachePath=self.__cachePath)
+        for contentType in ["bird_chem_comp_core", "pdbx_core"]:
+            mergeContentTypes = None
+            if contentType in ["pdbx_core"]:
+                mergeContentTypes = ["vrpt"]
+            #
+            locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            pathList = rpP.getLocatorPaths(locatorObjList)
+            locatorObjList2 = rpP.getLocatorsFromPaths(locatorObjList, pathList)
+            logger.info("%s pathList length %d", contentType, len(pathList))
+            self.assertEqual(len(locatorObjList), len(pathList))
+            self.assertEqual(len(locatorObjList), len(locatorObjList2))
+            if contentType == "pdbx_core":
+                logger.info("pdbx-core locators %d", len(locatorObjList))
+                containerList = rpP.getContainerList(locatorObjList)
+                logger.info("pdbx-core containerList (%d)", len(containerList))
+                self.assertEqual(len(containerList), len(locatorObjList))
+                for container in containerList:
+                    logger.debug("category names - (%d)", len(container.getObjNameList()))
+                    logger.debug("category names - (%r)", container.getObjNameList())
+                    self.assertGreaterEqual(len(container.getObjNameList()), 50)
+            #
+        for contentType in ["bird_chem_comp_core", "pdbx_core"]:
+            mergeContentTypes = None
+            if contentType in ["pdbx_core"]:
+                mergeContentTypes = ["vrpt"]
+            #
+            locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            pathList = rpP.getLocatorPaths(locatorObjList)
+            self.assertEqual(len(locatorObjList), len(pathList))
+            #
+            lCount = len(pathList)
+            idCodes = rpP.getLocatorIdcodes(contentType, locatorObjList)
+            self.assertEqual(len(locatorObjList), len(idCodes))
+            excludeList = idCodes[: int(len(idCodes) / 2)]
+            logger.debug("excludeList (%d) %r", len(excludeList), excludeList)
+            fL = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes, excludeIds=excludeList)
             logger.debug("fL (%d)", len(fL))
             self.assertEqual(lCount, len(fL) + len(excludeList))
 
 
 def repoSuite():
     suiteSelect = unittest.TestSuite()
-    suiteSelect.addTest(RepositoryProviderTests("testRepoUtils"))
+    suiteSelect.addTest(RepositoryProviderTests("testLocalRepoUtils"))
+    suiteSelect.addTest(RepositoryProviderTests("testRemoteRepoUtils"))
     return suiteSelect
 
 

@@ -20,9 +20,10 @@
 #   27-Aug-2019  jdw filter missing validation reports
 #   16-Sep-2019  jdw consolidate chem_comp_core with bird_chem_comp_core
 #   14-Feb-2020  jdw migrate to rcsb.utils.repository
+#   17-Sep-2021  jdw add remote repository access methods
 ##
 """
- Utilities for scanning and accessing data in common repository file systems.
+Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
 
 """
 __docformat__ = "restructuredtext en"
@@ -30,6 +31,7 @@ __author__ = "John Westbrook"
 __email__ = "jwest@rcsb.rutgers.edu"
 __license__ = "Apache 2.0"
 
+import glob
 import logging
 import os
 import time
@@ -37,6 +39,8 @@ import time
 from rcsb.utils.io.HashableDict import HashableDict
 from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
+from rcsb.utils.repository.CurrentHoldingsProvider import CurrentHoldingsProvider
+from rcsb.utils.repository.RemovedHoldingsProvider import RemovedHoldingsProvider
 from rcsb.utils.validation.ValidationReportProvider import ValidationReportProvider
 
 logger = logging.getLogger(__name__)
@@ -50,20 +54,36 @@ def toCifWrapper(xrt):
 
 
 class RepositoryProvider(object):
-    def __init__(self, cfgOb, cachePath=None, numProc=8, fileLimit=None, verbose=False):
+    """Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
+
+    Discovery modes:
+
+    Local file system mode - data sets are discovered by scanning repository files systems for files matching the require patterns,
+                     and repository paths are defined in configuration data. File system path information may be provided
+                     explicitly to avoid file system scans. Some merging and consolidation features are provided for validation data
+                     and chemical reference data.
+
+    Remote access mode - data sets are discovered from reading repository inventory files,
+                     and repository service endpoints are defined in configuration data.
+
+
+    """
+
+    def __init__(self, cfgOb, cachePath=None, discoveryMode="local", numProc=8, fileLimit=None, verbose=False):
         self.__fileLimit = fileLimit
         self.__numProc = numProc
         self.__verbose = verbose
         self.__cfgOb = cfgOb
+        self.__discoveryMode = discoveryMode if discoveryMode and discoveryMode in ["local", "remote"] else "local"
         self.__configName = self.__cfgOb.getDefaultSectionName()
         self.__topCachePath = cachePath if cachePath else "."
         self.__cachePath = os.path.join(self.__topCachePath, self.__cfgOb.get("REPO_UTIL_CACHE_DIR", sectionName=self.__configName))
         #
         self.__mU = MarshalUtil(workPath=self.__cachePath)
+        self.__chP = None
+        self.__rhP = None
+        logger.info("Discovery mode is %r", self.__discoveryMode)
         #
-        self.__ccPathD = None
-        #
-        self.__mpFormat = "[%(levelname)s] %(asctime)s %(processName)s-%(module)s.%(funcName)s: %(message)s"
 
     def getLocatorObjList(self, contentType, inputPathList=None, mergeContentTypes=None, excludeIds=None):
         """Convenience method to get the data path list for the input repository content type.
@@ -76,19 +96,24 @@ class RepositoryProvider(object):
             excludeIds (list or dict): exclude any locators for idCodes in this list or dictionary
 
         Returns:
-            Obj list: data file paths or tuple of file paths
+            (list): simple list of data file paths OR a tuple containing file path, format and merge details
+
+
+        Example:
+
+            locator object ({"locator": <path or URI> "fmt": <supported format code>, 'kwargs': {}},{}, ... )
+
+             supported extensions are:
+                 kwargs : {"marshalHelper": <fuction applied post read (e.g. toCifWrapper)>}
+
+             multiple artifacts within the a locator may be optionally merged/consolidated into a single data object.
 
         """
         inputPathList = inputPathList if inputPathList else []
         if inputPathList:
-            return self.getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
+            return self.__getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
         #
-        if mergeContentTypes and "vrpt" in mergeContentTypes and contentType in ["pdbx", "pdbx_core"]:
-            dictPath = os.path.join(self.__topCachePath, self.__cfgOb.get("DICTIONARY_CACHE_DIR", sectionName=self.__cfgOb.getDefaultSectionName()))
-            os.environ["_RP_DICT_PATH_"] = dictPath
-            locatorList = self.getEntryLocatorObjList(mergeContentTypes=mergeContentTypes)
-        else:
-            locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList)
+        locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
         #
         if excludeIds:
             fL = []
@@ -106,8 +131,61 @@ class RepositoryProvider(object):
 
         return locatorList
 
-    def getLocatorObjListWithInput(self, contentType, inputPathList=None, mergeContentTypes=None):
+    def getContainerList(self, locatorObjList):
+        """Return the PDBx data container list obtained by parsing the input locator object list."""
+        cL = []
+        for locatorObj in locatorObjList:
+            myContainerList = self.__mergeContainers(locatorObj, fmt="mmcif", mergeTarget=0)
+            for cA in myContainerList:
+                cL.append(cA)
+        return cL
+
+    def getLocatorIdcodes(self, contentType, locatorObjList, locatorIndex=0):
+        try:
+            if locatorObjList and isinstance(locatorObjList[0], str):
+                return [self.__getIdcodeFromLocatorPath(contentType, pth) for pth in locatorObjList]
+            else:
+                return [self.__getIdcodeFromLocatorPath(contentType, locatorObj[locatorIndex]["locator"]) for locatorObj in locatorObjList]
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return []
+
+    def getLocatorPaths(self, locatorObjList, locatorIndex=0):
+        try:
+            if locatorObjList and isinstance(locatorObjList[0], str):
+                return locatorObjList
+            else:
+                return [locatorObj[locatorIndex]["locator"] for locatorObj in locatorObjList]
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return []
+
+    def getLocatorsFromPaths(self, locatorObjList, pathList, locatorIndex=0):
+        """Return locator objects with paths (locatorObjIndex) matching the input pathList."""
+        # index the input locatorObjList
+        rL = []
+        try:
+            if locatorObjList and isinstance(locatorObjList[0], str):
+                return pathList
+            #
+            locIdx = {}
+            for ii, locatorObj in enumerate(locatorObjList):
+                if "locator" in locatorObj[locatorIndex]:
+                    locIdx[locatorObj[locatorIndex]["locator"]] = ii
+            #
+            for pth in pathList:
+                jj = locIdx[pth] if pth in locIdx else None
+                if jj is not None:
+                    rL.append(locatorObjList[jj])
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        #
+        return rL
+
+    #  ---- Private methods ----
+    def __getLocatorObjListWithInput(self, contentType, inputPathList=None, mergeContentTypes=None):
         """Convenience method to get the data path list for the input repository content type.
+        This is a special case to handle the content merging for the input path/locator list.
 
         Args:
             contentType (str): Repository content type (e.g. pdbx, chem_comp, bird, ...)
@@ -121,7 +199,7 @@ class RepositoryProvider(object):
         """
         inputPathList = inputPathList if inputPathList else []
         locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList)
-        # JDW move the following to config
+
         if mergeContentTypes and "vrpt" in mergeContentTypes and contentType in ["pdbx", "pdbx_core"]:
             dictPath = os.path.join(self.__topCachePath, self.__cfgOb.get("DICTIONARY_CACHE_DIR", sectionName=self.__cfgOb.getDefaultSectionName()))
             os.environ["_RP_DICT_PATH_"] = dictPath
@@ -148,15 +226,6 @@ class RepositoryProvider(object):
             locatorList = locObjL
         # -
         return locatorList
-
-    def getContainerList(self, locatorObjList):
-        """Return the data container list obtained by parsing the input locator object list."""
-        cL = []
-        for locatorObj in locatorObjList:
-            myContainerList = self.__mergeContainers(locatorObj, fmt="mmcif", mergeTarget=0)
-            for cA in myContainerList:
-                cL.append(cA)
-        return cL
 
     def __mergeContainers(self, locatorObj, fmt="mmcif", mergeTarget=0):
         """Consolidate content in auxiliary files locatorObj[1:] into
@@ -189,113 +258,176 @@ class RepositoryProvider(object):
 
         return cL
 
-    def getLocatorsFromPaths(self, locatorObjList, pathList, locatorIndex=0):
-        """Return locator objects with paths (locatorObjIndex) matching the input pathList."""
-        # index the input locatorObjList
-        rL = []
-        try:
-            if locatorObjList and isinstance(locatorObjList[0], str):
-                return pathList
-            #
-            locIdx = {}
-            for ii, locatorObj in enumerate(locatorObjList):
-                if "locator" in locatorObj[locatorIndex]:
-                    locIdx[locatorObj[locatorIndex]["locator"]] = ii
-            #
-            for pth in pathList:
-                jj = locIdx[pth] if pth in locIdx else None
-                if jj is not None:
-                    rL.append(locatorObjList[jj])
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        #
-        return rL
+    def __getLocatorList(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None):
+        if self.__discoveryMode == "local":
+            return self.__getLocatorListLocal(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
+        else:
+            return self.__getLocatorListRemote(contentType, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
 
-    def getLocatorIdcodes(self, contentType, locatorObjList, locatorIndex=0):
-        try:
-
-            if locatorObjList and isinstance(locatorObjList[0], str):
-                return [self.__getIdcodeFromLocatorPath(contentType, pth) for pth in locatorObjList]
-            else:
-                return [self.__getIdcodeFromLocatorPath(contentType, locatorObj[locatorIndex]["locator"]) for locatorObj in locatorObjList]
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        return []
-
-    def getLocatorPaths(self, locatorObjList, locatorIndex=0):
-        try:
-            if locatorObjList and isinstance(locatorObjList[0], str):
-                return locatorObjList
-            else:
-                return [locatorObj[locatorIndex]["locator"] for locatorObj in locatorObjList]
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        return []
-
-    def __getLocatorList(self, contentType, inputPathList=None):
-        """Internal convenience method to return repository path list by content type:"""
-        outputPathList = []
+    def __getLocatorListLocal(self, contentType, inputPathList=None, mergeContentTypes=None):
+        """Internal convenience method to return repository local path lists by content type:"""
+        outputLocatorList = []
         inputPathList = inputPathList if inputPathList else []
         try:
             if contentType in ["bird", "bird_core"]:
-                outputPathList = inputPathList if inputPathList else self.getBirdPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getBirdPathList()
             elif contentType == "bird_family":
-                outputPathList = inputPathList if inputPathList else self.getBirdFamilyPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getBirdFamilyPathList()
             elif contentType in ["chem_comp"]:
-                outputPathList = inputPathList if inputPathList else self.getChemCompPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getChemCompPathList()
             elif contentType in ["bird_chem_comp"]:
-                outputPathList = inputPathList if inputPathList else self.getBirdChemCompPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getBirdChemCompPathList()
+            elif contentType in ["pdbx", "pdbx_core"] and mergeContentTypes and "vrpt" in mergeContentTypes:
+                dictPath = os.path.join(self.__topCachePath, self.__cfgOb.get("DICTIONARY_CACHE_DIR", sectionName=self.__cfgOb.getDefaultSectionName()))
+                os.environ["_RP_DICT_PATH_"] = dictPath
+                outputLocatorList = self.__getEntryLocatorObjList(mergeContentTypes=mergeContentTypes)
+
             elif contentType in ["pdbx", "pdbx_core"]:
-                outputPathList = inputPathList if inputPathList else self.getEntryPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getEntryPathList()
+            #
             elif contentType in ["pdbx_obsolete"]:
-                outputPathList = inputPathList if inputPathList else self.getObsoleteEntryPathList()
+                outputLocatorList = inputPathList if inputPathList else self.getObsoleteEntryPathList()
             elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
-                outputPathList = inputPathList if inputPathList else self.mergeBirdAndChemCompRefData()
+                outputLocatorList = inputPathList if inputPathList else self.mergeBirdAndChemCompRefData()
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                outputPathList = inputPathList if inputPathList else self.getIhmDevPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getIhmDevPathList()
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
-                outputPathList = inputPathList if inputPathList else []
+                outputLocatorList = inputPathList if inputPathList else []
+            elif contentType in ["pdbx_core_model", "pdbx_core_model_alphafold"]:
+                outputLocatorList = inputPathList if inputPathList else self.__getModelPathList()
             else:
                 logger.warning("Unsupported contentType %s", contentType)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
 
         if self.__fileLimit:
-            outputPathList = outputPathList[: self.__fileLimit]
+            outputLocatorList = outputLocatorList[: self.__fileLimit]
 
-        return sorted(outputPathList)
+        return sorted(outputLocatorList) if outputLocatorList and isinstance(outputLocatorList[0], str) else outputLocatorList
+
+    def __getLocatorListRemote(self, contentType, inputIdCodeList=None, mergeContentTypes=None):
+        outputLocatorList = []
+        idCodeList = inputIdCodeList if inputIdCodeList else []
+        try:
+            if contentType in ["bird", "bird_core"]:
+                outputLocatorList = self.__getBirdUriList(idCodeList=idCodeList)
+            elif contentType == "bird_family":
+                outputLocatorList = self.__getBirdFamilyUriList(idCodeList=idCodeList)
+            elif contentType in ["chem_comp"]:
+                outputLocatorList = self.__getChemCompUriList(idCodeList=idCodeList)
+            elif contentType in ["bird_chem_comp"]:
+                outputLocatorList = self.__getBirdChemCompUriList(idCodeList=idCodeList)
+            elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
+                outputLocatorList = self.mergeBirdAndChemCompRefData()
+            #
+            elif contentType in ["pdbx", "pdbx_core"]:
+                if mergeContentTypes and "vrpt" in mergeContentTypes:
+                    dictPath = os.path.join(self.__topCachePath, self.__cfgOb.get("DICTIONARY_CACHE_DIR", sectionName=self.__cfgOb.getDefaultSectionName()))
+                    os.environ["_RP_DICT_PATH_"] = dictPath
+                    outputLocatorList = self.__getEntryUriList(idCodeList=idCodeList, mergeContentTypes=mergeContentTypes)
+                else:
+                    outputLocatorList = self.__getEntryUriList(idCodeList=idCodeList)
+            #
+            elif contentType in ["pdbx_obsolete"]:
+                outputLocatorList = self.__getObsoleteEntryUriList(idCodeList=idCodeList)
+            #
+            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                outputLocatorList = self.__getIhmDevPathList()
+            elif contentType in ["pdbx_core_model", "pdbx_core_model_alphafold"]:
+                outputLocatorList = self.__getModelPathList()
+            else:
+                logger.warning("Unsupported contentType %s", contentType)
+
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+
+        if self.__fileLimit:
+            outputLocatorList = outputLocatorList[: self.__fileLimit]
+
+        return sorted(outputLocatorList) if outputLocatorList and isinstance(outputLocatorList[0], str) else outputLocatorList
 
     def __getLocator(self, contentType, idCode, version="v1-0", checkExists=False):
+        if self.__discoveryMode == "local":
+            return self.__getLocatorLocal(contentType, idCode, version=version, checkExists=checkExists)
+        else:
+            return self.__getLocatorRemote(contentType, idCode)
+
+    def __getLocatorLocal(self, contentType, idCode, version="v1-0", checkExists=False):
         """Convenience method to return repository path for a content type and cardinal identifier."""
         pth = None
         try:
             idCodel = idCode.lower()
             if contentType == "bird":
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCode[-1], idCode + ".cif")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCode[-1], idCode + ".cif")
             elif contentType == "bird_family":
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCode[-1], idCode + ".cif")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCode[-1], idCode + ".cif")
             elif contentType in ["chem_comp", "chem_comp_core"]:
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCode[0], idCode, idCode + ".cif")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCode[0], idCode, idCode + ".cif")
             elif contentType in ["bird_chem_comp"]:
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCode[-1], idCode + ".cif")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCode[-1], idCode + ".cif")
             elif contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCodel[1:3], idCodel + ".cif.gz")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCode + ".cif")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCode, idCode + "_model_%s.cif.gz" % version)
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCode, idCode + "_model_%s.cif.gz" % version)
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             elif contentType in ["vrpt"]:
-                pth = os.path.join(self.__getRepoTopPath(contentType), idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
             else:
-                logger.warning("Unsupported contentType %s", contentType)
+                logger.warning("Unsupported local contentType %s", contentType)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
 
         if checkExists:
             pth = pth if self.__mU.exists(pth) else None
         return pth
+
+    def __getLocatorRemote(self, contentType, idCode, repositoryLayout="pdbftp"):
+        """Convenience method to return the URI for a content type and cardinal identifier."""
+        uri = None
+        _ = repositoryLayout
+        baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName)
+        try:
+            idCodel = idCode.lower()
+            if contentType == "bird":
+                # /pdb/refdata/bird/prd/1/
+                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "bird", "prd", idCode[-1], idCode + ".cif")
+            elif contentType == "bird_family":
+                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "bird", "family", idCode[-1], idCode + ".cif")
+            elif contentType in ["bird_chem_comp"]:
+                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "bird", "prdcc", idCode[-1], idCode + ".cif")
+            elif contentType in ["chem_comp", "chem_comp_core"]:
+                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "chem_comp", idCode[0], idCode, idCode + ".cif")
+            #
+            elif contentType in ["pdbx", "pdbx_core"]:
+                # pdb/data/structures/divided/mmCIF
+                uri = os.path.join(baseUrlPDB, "pdb", "data", "structures", "divided", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
+            elif contentType in ["vrpt", "validation_report"]:
+                # /pdb/validation_reports/
+                # https://ftp.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.xml.gz
+                uri = os.path.join(baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
+                # logger.info("uri %r", uri)
+            #
+            elif contentType in ["pdbx_obsolete"]:
+                # pdb/data/structures/obsolete/mmCIF/
+                uri = os.path.join(baseUrlPDB, "pdb", "data", "structures", "obsolete", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
+            elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
+                uri = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
+            #
+            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                baseUrlPDBDev = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName)
+                # https://pdb-dev.wwpdb.org/cif/PDBDEV_00000001.cif
+                uri = os.path.join(baseUrlPDBDev, "cif", idCode + ".cif")
+            elif contentType in ["pdb_distro", "da_internal", "status_history"]:
+                pass
+            else:
+                logger.warning("Unsupported remote contentType %s", contentType)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+
+        return uri
 
     def __getIdcodeFromLocatorPath(self, contentType, pth):
         """Convenience method to return the idcode from the locator path."""
@@ -319,7 +451,7 @@ class RepositoryProvider(object):
             logger.exception("Failing for %r %r with %s", contentType, pth, str(e))
         return idCode
 
-    def __getRepoTopPath(self, contentType):
+    def __getRepoLocalPath(self, contentType):
         """Convenience method to return repository top path from configuration data."""
         pth = None
         try:
@@ -353,6 +485,122 @@ class RepositoryProvider(object):
             logger.exception("Failing with %s", str(e))
         return pth
 
+    # JDW ---  URI code ----
+    def __getEntryUriList(self, idCodeList=None, mergeContentTypes=None):
+        uL = []
+        try:
+            if not self.__chP:
+                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+            #
+            tIdL = self.__chP.getEntryIdList()
+            if idCodeList:
+                idCodeList = [t.upper() for t in idCodeList]
+                tIdL = list(set(tIdL).intersection(idCodeList))
+            #
+            for tId in tIdL:
+                kwD = HashableDict({})
+                locObj = [HashableDict({"locator": self.__getLocatorRemote("pdbx_core", tId), "fmt": "mmcif", "kwargs": kwD})]
+                if mergeContentTypes and "vrpt" in mergeContentTypes:
+                    if self.__chP.hasEntryContentType(tId, "validation_report"):
+                        kwD = HashableDict({"marshalHelper": toCifWrapper})
+                        locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "xml", "kwargs": kwD}))
+                uL.append(locObj)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return self.__applyLimit(uL)
+
+    def __getObsoleteEntryUriList(self, idCodeList=None):
+        uL = []
+        try:
+            if not self.__rhP:
+                self.__rhP = RemovedHoldingsProvider(self.__cachePath, useCache=True)
+            #
+            tIdL = self.__rhP.getEntryByStatus("OBS")
+            if idCodeList:
+                idCodeList = [t.upper() for t in idCodeList]
+                tIdL = list(set(tIdL).intersection(idCodeList))
+            #
+            for tId in tIdL:
+                kwD = HashableDict({})
+                locObj = [HashableDict({"locator": self.__getLocatorRemote("pdbx_obsolete", tId), "fmt": "mmcif", "kwargs": kwD})]
+                uL.append(locObj)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return self.__applyLimit(uL)
+
+    def __getBirdUriList(self, idCodeList=None):
+        uL = []
+        try:
+            if not self.__chP:
+                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+            #
+            tIdL = self.__chP.getBirdIdList()
+            if idCodeList:
+                idCodeList = [t.upper() for t in idCodeList]
+                tIdL = list(set(tIdL).intersection(idCodeList))
+            #
+            kwD = HashableDict({})
+            for tId in tIdL:
+                uL.append([HashableDict({"locator": self.__getLocatorRemote("bird", tId), "fmt": "mmcif", "kwargs": kwD})])
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return self.__applyLimit(uL)
+
+    def __getBirdFamilyUriList(self, idCodeList=None):
+        uL = []
+        try:
+            if not self.__chP:
+                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+            #
+            tIdL = self.__chP.getBirdFamilyIdList()
+            if idCodeList:
+                idCodeList = [t.upper() for t in idCodeList]
+                tIdL = list(set(tIdL).intersection(idCodeList))
+            #
+            kwD = HashableDict({})
+            for tId in tIdL:
+                uL.append([{"locator": self.__getLocatorRemote("bird_family", tId), "fmt": "mmcif", "kwargs": kwD}])
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return self.__applyLimit(uL)
+
+    def __getChemCompUriList(self, idCodeList=None):
+        uL = []
+        try:
+            if not self.__chP:
+                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+            #
+            tIdL = self.__chP.getChemCompIdList()
+            if idCodeList:
+                idCodeList = [t.upper() for t in idCodeList]
+                tIdL = list(set(tIdL).intersection(idCodeList))
+            #
+            kwD = HashableDict({})
+            for tId in tIdL:
+                uL.append([HashableDict({"locator": self.__getLocatorRemote("chem_comp", tId), "fmt": "mmcif", "kwargs": kwD})])
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return self.__applyLimit(uL)
+
+    def __getBirdChemCompUriList(self, idCodeList=None):
+        uL = []
+        try:
+            if not self.__chP:
+                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+            #
+            tIdL = self.__chP.getBirdChemCompIdList()
+            if idCodeList:
+                idCodeList = [t.upper() for t in idCodeList]
+                tIdL = list(set(tIdL).intersection(idCodeList))
+            #
+            kwD = HashableDict({})
+            for tId in tIdL:
+                uL.append([HashableDict({"locator": self.__getLocatorRemote("bird_chem_comp", tId), "fmt": "mmcif", "kwargs": kwD})])
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return self.__applyLimit(uL)
+
+    # -- Path based code ---
     def _chemCompPathWorker(self, dataList, procName, optionsD, workingDir):
         """Return the list of chemical component definition file paths in the current repository."""
         _ = procName
@@ -369,10 +617,10 @@ class RepositoryProvider(object):
                         pathList.append(os.path.join(root, name))
         return dataList, pathList, []
 
-    def getChemCompPathList(self):
-        return self.__getChemCompPathList(self.__getRepoTopPath("chem_comp"), numProc=self.__numProc)
+    def __getChemCompPathList(self):
+        return self.__fetchChemCompPathList(self.__getRepoLocalPath("chem_comp"), numProc=self.__numProc)
 
-    def __getChemCompPathList(self, topRepoPath, numProc=8):
+    def __fetchChemCompPathList(self, topRepoPath, numProc=8):
         """Get the path list for the chemical component definition repository"""
         ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
         logger.debug("Starting at %s", ts)
@@ -392,7 +640,7 @@ class RepositoryProvider(object):
             logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
-        return self.__applyFileLimit(pathList)
+        return self.__applyLimit(pathList)
 
     def _entryLocatorObjWithMergeWorker(self, dataList, procName, optionsD, workingDir):
         """Return the list of entry locator objects including merge content in the current repository."""
@@ -421,10 +669,10 @@ class RepositoryProvider(object):
                         locatorObjList.append(lObj)
         return dataList, locatorObjList, []
 
-    def getEntryLocatorObjList(self, mergeContentTypes=None):
-        return self.__getEntryLocatorObjList(self.__getRepoTopPath("pdbx"), numProc=self.__numProc, mergeContentTypes=mergeContentTypes)
+    def __getEntryLocatorObjList(self, mergeContentTypes=None):
+        return self.__fetchEntryLocatorObjList(self.__getRepoLocalPath("pdbx"), numProc=self.__numProc, mergeContentTypes=mergeContentTypes)
 
-    def __getEntryLocatorObjList(self, topRepoPath, numProc=8, mergeContentTypes=None):
+    def __fetchEntryLocatorObjList(self, topRepoPath, numProc=8, mergeContentTypes=None):
         """Get the path list for structure entries in the input repository"""
         ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
         logger.debug("Starting at %s", ts)
@@ -453,7 +701,7 @@ class RepositoryProvider(object):
             logger.debug("Locator object list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
-        return self.__applyFileLimit(pathList)
+        return self.__applyLimit(pathList)
 
     def _entryPathWorker(self, dataList, procName, optionsD, workingDir):
         """Return the list of entry file paths in the current repository."""
@@ -471,13 +719,13 @@ class RepositoryProvider(object):
                         pathList.append(os.path.join(root, name))
         return dataList, pathList, []
 
-    def getEntryPathList(self):
-        return self.__getEntryPathList(self.__getRepoTopPath("pdbx"), numProc=self.__numProc)
+    def __getEntryPathList(self):
+        return self.__fetchEntryPathList(self.__getRepoLocalPath("pdbx"), numProc=self.__numProc)
 
     def getObsoleteEntryPathList(self):
-        return self.__getEntryPathList(self.__getRepoTopPath("pdbx_obsolete"), numProc=self.__numProc)
+        return self.__fetchEntryPathList(self.__getRepoLocalPath("pdbx_obsolete"), numProc=self.__numProc)
 
-    def __getEntryPathList(self, topRepoPath, numProc=8):
+    def __fetchEntryPathList(self, topRepoPath, numProc=8):
         """Get the path list for structure entries in the input repository"""
         ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
         logger.debug("Starting at %s", ts)
@@ -505,12 +753,12 @@ class RepositoryProvider(object):
             logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
-        return self.__applyFileLimit(pathList)
+        return self.__applyLimit(pathList)
 
-    def getBirdPathList(self):
-        return self.__getBirdPathList(self.__getRepoTopPath("bird"))
+    def __getBirdPathList(self):
+        return self.__fetchBirdPathList(self.__getRepoLocalPath("bird"))
 
-    def __getBirdPathList(self, topRepoPath):
+    def __fetchBirdPathList(self, topRepoPath):
         """Return the list of definition file paths in the current repository.
 
         List is ordered in increasing PRD ID numerical code.
@@ -531,12 +779,12 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         #
-        return self.__applyFileLimit(pathList)
+        return self.__applyLimit(pathList)
 
-    def getBirdFamilyPathList(self):
-        return self.__getBirdFamilyPathList(self.__getRepoTopPath("bird_family"))
+    def __getBirdFamilyPathList(self):
+        return self.__fetchBirdFamilyPathList(self.__getRepoLocalPath("bird_family"))
 
-    def __getBirdFamilyPathList(self, topRepoPath):
+    def __fetchBirdFamilyPathList(self, topRepoPath):
         """Return the list of definition file paths in the current repository.
 
         List is ordered in increasing PRD ID numerical code.
@@ -557,12 +805,12 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         #
-        return self.__applyFileLimit(pathList)
+        return self.__applyLimit(pathList)
 
-    def getBirdChemCompPathList(self):
-        return self.__getBirdChemCompPathList(self.__getRepoTopPath("bird_chem_comp"))
+    def __getBirdChemCompPathList(self):
+        return self.__fetchBirdChemCompPathList(self.__getRepoLocalPath("bird_chem_comp"))
 
-    def __getBirdChemCompPathList(self, topRepoPath):
+    def __fetchBirdChemCompPathList(self, topRepoPath):
         """Return the list of definition file paths in the current repository.
 
         List is ordered in increasing PRD ID numerical code.
@@ -583,14 +831,14 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         #
-        return self.__applyFileLimit(pathList)
+        return self.__applyLimit(pathList)
 
-    def __applyFileLimit(self, pathList):
-        logger.debug("Length of file path list %d (limit %r)", len(pathList), self.__fileLimit)
+    def __applyLimit(self, itemList):
+        logger.debug("Length of item list %d (limit %r)", len(itemList), self.__fileLimit)
         if self.__fileLimit:
-            return pathList[: self.__fileLimit]
+            return itemList[: self.__fileLimit]
         else:
-            return pathList
+            return itemList
 
     def __buildFamilyIndex(self):
         """Using information from the PRD family definition:
@@ -609,7 +857,7 @@ class RepositoryProvider(object):
         """
         prdD = {}
         try:
-            pthL = self.__getLocatorList("bird_family")
+            pthL = self.getLocatorPaths(self.__getLocatorList("bird_family"))
             for pth in pthL:
                 containerL = self.__mU.doImport(pth, fmt="mmcif")
                 for container in containerL:
@@ -636,14 +884,14 @@ class RepositoryProvider(object):
         ccPathD = {}
         prdStatusD = {}
         try:
-            ccPathL = self.__getLocatorList("chem_comp")
+            ccPathL = self.getLocatorPaths(self.__getLocatorList("chem_comp"))
             ccPathD = {}
             for ccPath in ccPathL:
                 _, fn = os.path.split(ccPath)
                 ccId, _ = os.path.splitext(fn)
                 ccPathD[ccId] = ccPath
             logger.info("Chemical component path list (%d)", len(ccPathD))
-            pthL = self.__getLocatorList("bird")
+            pthL = self.getLocatorPaths(self.__getLocatorList("bird"))
             logger.info("BIRD path list (%d)", len(pthL))
             for pth in pthL:
                 containerL = self.__mU.doImport(pth, fmt="mmcif")
@@ -678,7 +926,7 @@ class RepositoryProvider(object):
         prdSmallMolCcD, ccPathD, prdStatusD = self.__buildBirdCcIndex()
         logger.info("PRD to CCD index length %d CCD map path length %d", len(prdSmallMolCcD), len(ccPathD))
         outputPathList = self.mergeBirdRefData(prdSmallMolCcD, prdStatusD)
-        ccOutputPathList = [pth for pth in self.getChemCompPathList() if pth not in ccPathD]
+        ccOutputPathList = [pth for pth in self.__getChemCompPathList() if pth not in ccPathD]
         outputPathList.extend(ccOutputPathList)
         return outputPathList
 
@@ -693,8 +941,9 @@ class RepositoryProvider(object):
 
         """
         outPathList = []
+        iSkipUnreleased = 0
         try:
-            birdPathList = self.__getLocatorList("bird")
+            birdPathList = self.getLocatorPaths(self.__getLocatorList("bird"))
             birdPathD = {}
             for birdPath in birdPathList:
                 _, fn = os.path.split(birdPath)
@@ -703,7 +952,7 @@ class RepositoryProvider(object):
             #
             logger.info("BIRD path length %d", len(birdPathD))
             logger.debug("BIRD keys %r", list(birdPathD.keys()))
-            birdCcPathList = self.__getLocatorList("bird_chem_comp")
+            birdCcPathList = self.getLocatorPaths(self.__getLocatorList("bird_chem_comp"))
             birdCcPathD = {}
             for birdCcPath in birdCcPathList:
                 _, fn = os.path.split(birdCcPath)
@@ -718,11 +967,10 @@ class RepositoryProvider(object):
             logger.debug("Family index keys %r", list(fD.keys()))
             logger.info("PRD to CCD small mol index length %d", len(prdSmallMolCcD))
             #
-            iSkip = 0
             for prdId in birdPathD:
                 if prdId in prdStatusD and prdStatusD[prdId] != "REL":
                     logger.debug("Skipping BIRD with non-REL status %s", prdId)
-                    iSkip += 1
+                    iSkipUnreleased += 1
                     continue
                 fp = os.path.join(self.__cachePath, prdId + ".cif")
                 logger.debug("Export cache path is %r", fp)
@@ -767,34 +1015,35 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         #
-        logger.info("Merged BIRD/Family/CC path length %d (skipped non-released %d)", len(outPathList), iSkip)
+        logger.info("Merged BIRD/Family/CC path length %d (skipped non-released %d)", len(outPathList), iSkipUnreleased)
         return outPathList
         #
 
-    def __exportConfig(self, container):
-        """
-        - CATEGORY_NAME: diffrn_detector
-          ATTRIBUTE_NAME_LIST:
-              - pdbx_frequency
-        - CATEGORY_NAME: pdbx_serial_crystallography_measurement
-          ATTRIBUTE_NAME_LIST:
-              - diffrn_id
-              - pulse_energy
-              - pulse_duration
-              - xfel_pulse_repetition_rate
-        """
-        for catName in container.getObjNameList():
-            cObj = container.getObj(catName)
-            print("- CATEGORY_NAME: %s" % catName)
-            print("  ATTRIBUTE_NAME_LIST:")
-            for atName in cObj.getAttributeList():
-                print("       - %s" % atName)
-        return True
+    def __getModelPathList(self):
+        """Return the list of computational models the current cached model repository.
 
-    def getIhmDevPathList(self):
-        return self.__getIhmDevPathList(self.__getRepoTopPath("ihm_dev"))
+        File name template is: *.cif.gz
 
-    def __getIhmDevPathList(self, topRepoPath):
+        """
+        #
+        for modelType in ["AlphaFold"]:
+            modelDirPath = os.path.join(self.__topCachePath, modelType)
+            pathList = []
+            logger.info("Searching for models in path %r", modelDirPath)
+            try:
+                pattern = os.path.join(modelDirPath, "*", "*.cif.gz")
+                logger.info("Using pattern %r", pattern)
+                for pth in glob.iglob(pattern, recursive=True):
+                    pathList.append(pth)
+            except Exception as e:
+                logger.exception("Failing search in %r with %s", modelDirPath, str(e))
+            #
+        return self.__applyLimit(pathList)
+
+    def __getIhmDevPathList(self):
+        return self.__fetchIhmDevPathList(self.__getRepoLocalPath("ihm_dev"))
+
+    def __fetchIhmDevPathList(self, topRepoPath):
         """Return the list of I/HM entries in the current repository.
 
         File name template is: PDBDEV_0000 0020_model_v1-0.cif.gz
@@ -818,4 +1067,4 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing search in %r with %s", topRepoPath, str(e))
         #
-        return self.__applyFileLimit(pathList)
+        return self.__applyLimit(pathList)

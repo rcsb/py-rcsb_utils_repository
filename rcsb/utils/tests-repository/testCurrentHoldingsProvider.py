@@ -22,6 +22,7 @@ import os
 import time
 import unittest
 
+from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.repository.CurrentHoldingsProvider import CurrentHoldingsProvider
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s]-%(module)s.%(funcName)s: %(message)s")
@@ -36,8 +37,12 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
     def setUp(self):
         #
         #
-        self.__cachePath = os.path.join(TOPDIR, "CACHE")
-        self.__holdingsDirPath = os.path.join(self.__cachePath, "repository")
+        self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
+        self.__dataPath = os.path.join(HERE, "test-data")
+        #
+        # Mock the EntryInfo cache -
+        fU = FileUtil()
+        fU.put(os.path.join(self.__dataPath, "entry_info_details.json"), os.path.join(self.__cachePath, "rcsb_entry_info", "entry_info_details.json"))
         #
         self.__startTime = time.time()
         logger.debug("Starting %s at %s", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
@@ -50,8 +55,11 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
         """Test case - get current holdings"""
         try:
             listLen = 177400
-            chP = CurrentHoldingsProvider(holdingsDirPath=self.__holdingsDirPath, useCache=False)
+            useCache = False
+            chP = CurrentHoldingsProvider(self.__cachePath, useCache)
             ok = chP.testCache()
+            ctL = chP.getAllContentTypes()
+            logger.info("contentTypes %r", ctL)
             self.assertTrue(ok)
             cD = chP.getEntryInventory()
             logger.info("current inventory (%d)", len(cD))
@@ -59,11 +67,12 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
             #
             ctL = chP.getEntryContentTypes("1kip")
             logger.debug("ctL (%d) %r ", len(ctL), ctL)
-            self.assertGreaterEqual(len(ctL), 9)
+            self.assertGreaterEqual(len(ctL), 8)
             #
             for ct in ctL:
                 fL = chP.getEntryContentTypePathList("1kip", ct)
-                self.assertGreaterEqual(len(fL), 1)
+                if "Map" not in ct:
+                    self.assertGreaterEqual(len(fL), 1)
             #
             idList = chP.getEntryIdList()
             self.assertGreaterEqual(len(idList), listLen)
@@ -71,6 +80,9 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
             idList = chP.getEntryIdList(afterDateTimeStamp="2020-01-01")
             logger.info("Ids after 2020 (%d)", len(idList))
             self.assertGreaterEqual(len(idList), 40200)
+            #
+            ctD, assemD = chP.getRcsbContentAndAssemblies()
+            logger.info("ctD (%d) assemD (%d)", len(ctD), len(assemD))
 
         except Exception as e:
             logger.exception("Failing with %s", str(e))

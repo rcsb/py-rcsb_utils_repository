@@ -34,8 +34,7 @@ TOPDIR = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 
 class UnreleasedHoldingsProviderTests(unittest.TestCase):
     def setUp(self):
-        self.__cachePath = os.path.join(TOPDIR, "CACHE")
-        self.__holdingsDirPath = os.path.join(self.__cachePath, "repository")
+        self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
         #
         self.__startTime = time.time()
         logger.debug("Starting %s at %s", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
@@ -47,16 +46,24 @@ class UnreleasedHoldingsProviderTests(unittest.TestCase):
     def testUnreleased(self):
         """Test case - get unreleased holdings"""
         try:
-            rmP = UnreleasedHoldingsProvider(holdingsDirPath=self.__holdingsDirPath, useCache=False)
+            rmP = UnreleasedHoldingsProvider(self.__cachePath, useCache=False)
             ok = rmP.testCache()
             self.assertTrue(ok)
             cD = rmP.getInventory()
             logger.info("unreleased inventory (%d)", len(cD))
             self.assertGreaterEqual(len(cD), 18000)
+            kS = set()
+            for entryId in cD:
+                for ky in cD[entryId]:
+                    kS.add(ky)
+            logger.info("unique keys %r", list(kS))
             #
             sc = rmP.getStatusCode("7oj4")
-            self.assertEqual(sc, "AUTH")
+            self.assertEqual(sc, "HPUB")
             #
+            retD, _ = rmP.getRcsbUnreleasedData()
+            self.assertGreaterEqual(len(retD), 1000)
+
         except Exception as e:
             logger.exception("Failing with %s", str(e))
 

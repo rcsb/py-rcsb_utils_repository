@@ -34,8 +34,7 @@ TOPDIR = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 
 class RemovedHoldingsProviderTests(unittest.TestCase):
     def setUp(self):
-        self.__cachePath = os.path.join(TOPDIR, "CACHE")
-        self.__holdingsDirPath = os.path.join(self.__cachePath, "repository")
+        self.__cachePath = os.path.join(HERE, "test-output", "CACHE")
         #
         self.__startTime = time.time()
         logger.debug("Starting %s at %s", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()))
@@ -47,7 +46,8 @@ class RemovedHoldingsProviderTests(unittest.TestCase):
     def testRemoved(self):
         """Test case - get removed holdings"""
         try:
-            rmP = RemovedHoldingsProvider(holdingsDirPath=self.__holdingsDirPath, useCache=False)
+            useCache = False
+            rmP = RemovedHoldingsProvider(self.__cachePath, useCache)
             ok = rmP.testCache()
             self.assertTrue(ok)
             cD = rmP.getInventory()
@@ -64,6 +64,24 @@ class RemovedHoldingsProviderTests(unittest.TestCase):
             sc = rmP.getStatusCode("6kpv")
             self.assertEqual(sc, "OBS")
             #
+            ctL = rmP.getAllContentTypes()
+            logger.info("All removed types: %r", ctL)
+            #
+            # trsfD, insilicoD, auditAuthorD, removedD, superD = rmP.getRcsbRemovedData()
+            _, _, _, removedD, _ = rmP.getRcsbRemovedData()
+            #
+            kys = list(removedD.keys())
+            for ky in kys:
+                logger.debug("(%r): %r", ky, removedD[ky])
+            self.assertGreaterEqual(len(removedD), 4200)
+            #
+            scS = set()
+            for entryId in rmP.getRemovedEntries():
+                sL = rmP.getSupersededBy(entryId)
+                if len(sL) > 1:
+                    logger.info("(%r) %r", entryId, sL)
+                scS.add(rmP.getStatusCode(entryId))
+            logger.info("status codes %r", scS)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
 
