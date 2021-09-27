@@ -1041,7 +1041,7 @@ class RepositoryProvider(object):
                         cL = self.__mU.doImport(pthCc, fmt="mmcif")
                         ccD = cL[0]
                     except Exception as e:
-                        logger.error("(%s) failed getting path %r", prdId, pthCc)
+                        logger.error("(%s) failed getting path %r: %r", prdId, pthCc, str(e))
                     #
                 elif prdId in birdCcPathD:
                     try:
@@ -1049,7 +1049,7 @@ class RepositoryProvider(object):
                         c1L = self.__mU.doImport(pth1, fmt="mmcif")
                         ccBird = c1L[0]
                     except Exception as e:
-                        logger.error("(%s) Failed getting path %r", prdId, pth1)
+                        logger.error("(%s) Failed getting path %r", prdId, pth1, str(e))
                     #
                 cFam = None
                 if prdId in fD:
