@@ -1,5 +1,5 @@
-mmcif >= 0.71
-rcsb.utils.io >= 1.28
+mmcif >= 0.72
+rcsb.utils.io >= 1.30
 rcsb.utils.multiproc >= 0.18
 rcsb.utils.validation >= 0.25
 rcsb.utils.insilico3d >= 0.11

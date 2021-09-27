@@ -399,7 +399,7 @@ class RepositoryProvider(object):
             elif contentType in ["bird_chem_comp"]:
                 uri = os.path.join(baseUrlPDB, "pdb", "refdata", "bird", "prdcc", idCode[-1], idCode + ".cif")
             elif contentType in ["chem_comp", "chem_comp_core"]:
-                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "chem_comp", idCode[0], idCode, idCode + ".cif")
+                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "chem_comp", idCode[-1], idCode, idCode + ".cif")
             #
             elif contentType in ["pdbx", "pdbx_core"]:
                 # pdb/data/structures/divided/mmCIF
@@ -916,6 +916,7 @@ class RepositoryProvider(object):
                                 ccPathD[ccPathD[ccId]] = {"ccId": ccId, "prdId": prdId}
                             else:
                                 logger.error("Bad ccId %r for BIRD %r", ccId, prdId)
+
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         logger.info("Candidate Chemical Components (%d) BIRDS (%d) BIRD status details (%d)", len(prdD), len(ccPathD), len(prdStatusD))
@@ -923,14 +924,16 @@ class RepositoryProvider(object):
 
     # -
     def mergeBirdAndChemCompRefData(self):
+        # JDW note that this merging procedure expects access to all reference data -
+        # self.__fileLimit = None
         prdSmallMolCcD, ccPathD, prdStatusD = self.__buildBirdCcIndex()
         logger.info("PRD to CCD index length %d CCD map path length %d", len(prdSmallMolCcD), len(ccPathD))
-        outputPathList = self.mergeBirdRefData(prdSmallMolCcD, prdStatusD)
+        outputPathList = self.__mergeBirdRefData(prdSmallMolCcD, prdStatusD)
         ccOutputPathList = [pth for pth in self.__getChemCompPathList() if pth not in ccPathD]
         outputPathList.extend(ccOutputPathList)
         return outputPathList
 
-    def mergeBirdRefData(self, prdSmallMolCcD, prdStatusD):
+    def __mergeBirdRefData(self, prdSmallMolCcD, prdStatusD):
         """Consolidate all of the bird reference data in a single container.
 
         If the BIRD is a 'small molecule' type then also merge with the associated CC definition.
@@ -980,19 +983,73 @@ class RepositoryProvider(object):
                 cFull = cL[0]
                 logger.debug("Got Bird %r", cFull.getName())
                 #
+                # --- JDW
+                # add missing one_letter_codes item
+                if cFull.exists("pdbx_reference_entity_sequence") and cFull.exists("pdbx_reference_entity_poly_seq"):
+                    aaDict3 = {
+                        "ALA": "A",
+                        "ARG": "R",
+                        "ASN": "N",
+                        "ASP": "D",
+                        "ASX": "B",
+                        "CYS": "C",
+                        "GLN": "Q",
+                        "GLU": "E",
+                        "GLX": "Z",
+                        "GLY": "G",
+                        "HIS": "H",
+                        "ILE": "I",
+                        "LEU": "L",
+                        "LYS": "K",
+                        "MET": "M",
+                        "PHE": "F",
+                        "PRO": "P",
+                        "SER": "S",
+                        "THR": "T",
+                        "TRP": "W",
+                        "TYR": "Y",
+                        "VAL": "V",
+                        "PYL": "O",
+                        "SEC": "U",
+                    }
+                    catObj = cFull.getObj("pdbx_reference_entity_sequence")
+                    if not catObj.hasAttribute("one_letter_codes"):
+                        logger.debug("adding one letter codes for %r", prdId)
+                        seqObj = cFull.getObj("pdbx_reference_entity_poly_seq")
+                        seqD = {}
+                        for jj in range(0, seqObj.getRowCount()):
+                            entityId = seqObj.getValue("ref_entity_id", jj)
+                            monId = seqObj.getValue("mon_id", jj)
+                            seqD.setdefault(entityId, []).append(monId)
+                        #
+                        logger.debug("seqD %r", seqD)
+                        catObj.appendAttribute("one_letter_codes")
+                        for ii in range(catObj.getRowCount()):
+                            entityId = catObj.getValue("ref_entity_id", ii)
+                            if entityId in seqD:
+                                ttL = [aaDict3[tt] if tt in aaDict3 else "X" for tt in seqD[entityId]]
+                                catObj.setValue("".join(ttL), "one_letter_codes", ii)
+                            else:
+                                logger.error("%r missing sequence for entity %r", prdId, entityId)
+                # ---
                 #
                 ccBird = None
                 ccD = None
                 if prdId in prdSmallMolCcD:
-                    pthCc = prdSmallMolCcD[prdId]["ccPath"]
-                    cL = self.__mU.doImport(pthCc, fmt="mmcif")
-                    ccD = cL[0]
-                    logger.debug("Got corresponding CCD %r", ccD.getName())
+                    try:
+                        pthCc = prdSmallMolCcD[prdId]["ccPath"]
+                        cL = self.__mU.doImport(pthCc, fmt="mmcif")
+                        ccD = cL[0]
+                    except Exception as e:
+                        logger.error("(%s) failed getting path %r", prdId, pthCc)
+                    #
                 elif prdId in birdCcPathD:
-                    pth1 = birdCcPathD[prdId]
-                    c1L = self.__mU.doImport(pth1, fmt="mmcif")
-                    ccBird = c1L[0]
-                    logger.debug("Got ccBird %r", ccBird.getName())
+                    try:
+                        pth1 = birdCcPathD[prdId]
+                        c1L = self.__mU.doImport(pth1, fmt="mmcif")
+                        ccBird = c1L[0]
+                    except Exception as e:
+                        logger.error("(%s) Failed getting path %r", prdId, pth1)
                     #
                 cFam = None
                 if prdId in fD:
