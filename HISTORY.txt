@@ -11,3 +11,4 @@
 26-Aug-2021 - V0.19 Update dependencies
 21-Sep-2021 - V0.20 Add UpdateHoldingsProvider(), and discoveryMode option for local and remote repos in RespositoryProvider().
 27-Sep-2021 - V0.21 Adjust URI paths in RespositoryProvider() and patch to compute missing BIRD annotations in the public archive
+28-Sep-2021 - V0.22 Add a more specific test for validation report xml data in CurrentHoldingsProvider.hasValidationReportData()

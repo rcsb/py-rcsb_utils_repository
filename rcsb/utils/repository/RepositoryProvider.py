@@ -501,7 +501,8 @@ class RepositoryProvider(object):
                 kwD = HashableDict({})
                 locObj = [HashableDict({"locator": self.__getLocatorRemote("pdbx_core", tId), "fmt": "mmcif", "kwargs": kwD})]
                 if mergeContentTypes and "vrpt" in mergeContentTypes:
-                    if self.__chP.hasEntryContentType(tId, "validation_report"):
+                    # if self.__chP.hasEntryContentType(tId, "validation_report"):
+                    if self.__chP.hasValidationReportData(tId):
                         kwD = HashableDict({"marshalHelper": toCifWrapper})
                         locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "xml", "kwargs": kwD}))
                 uL.append(locObj)

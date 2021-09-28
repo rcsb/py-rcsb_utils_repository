@@ -156,6 +156,18 @@ class CurrentHoldingsProvider(object):
             retD[entryId] = {"status": "CURRENT", "status_code": "REL"}
         return retD
 
+    def hasValidationReportData(self, entryId):
+        return self.__hasValidationReportData(self.__invD, entryId)
+
+    def __hasValidationReportData(self, invD, entryId):
+        if entryId in invD:
+            tD = invD[entryId]
+            if "validation_report" in tD:
+                for pth in tD["validation_report"]:
+                    if pth[:-7] == ".xml.gz":
+                        return True
+        return False
+
     def __assembleEntryContentTypes(self, invD):
         # Mapping between repository content types and those used by RCSB.org
         contentTypeD = {
