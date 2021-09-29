@@ -114,6 +114,7 @@ class RepositoryProvider(object):
 
         """
         inputPathList = inputPathList if inputPathList else []
+        inputIdCodeList = inputIdCodeList if inputIdCodeList else []
         if inputPathList:
             return self.__getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
         #
@@ -509,7 +510,7 @@ class RepositoryProvider(object):
                     if self.__chP.hasValidationReportData(tId):
                         kwD = HashableDict({"marshalHelper": toCifWrapper})
                         locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "xml", "kwargs": kwD}))
-                uL.append(locObj)
+                uL.append(tuple(locObj))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(uL)
@@ -528,7 +529,7 @@ class RepositoryProvider(object):
             for tId in tIdL:
                 kwD = HashableDict({})
                 locObj = [HashableDict({"locator": self.__getLocatorRemote("pdbx_obsolete", tId), "fmt": "mmcif", "kwargs": kwD})]
-                uL.append(locObj)
+                uL.append(tuple(locObj))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(uL)
@@ -546,7 +547,7 @@ class RepositoryProvider(object):
             #
             kwD = HashableDict({})
             for tId in tIdL:
-                uL.append([HashableDict({"locator": self.__getLocatorRemote("bird", tId), "fmt": "mmcif", "kwargs": kwD})])
+                uL.append(tuple([HashableDict({"locator": self.__getLocatorRemote("bird", tId), "fmt": "mmcif", "kwargs": kwD})]))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(uL)
@@ -564,7 +565,7 @@ class RepositoryProvider(object):
             #
             kwD = HashableDict({})
             for tId in tIdL:
-                uL.append([{"locator": self.__getLocatorRemote("bird_family", tId), "fmt": "mmcif", "kwargs": kwD}])
+                uL.append(tuple([{"locator": self.__getLocatorRemote("bird_family", tId), "fmt": "mmcif", "kwargs": kwD}]))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(uL)
@@ -582,7 +583,7 @@ class RepositoryProvider(object):
             #
             kwD = HashableDict({})
             for tId in tIdL:
-                uL.append([HashableDict({"locator": self.__getLocatorRemote("chem_comp", tId), "fmt": "mmcif", "kwargs": kwD})])
+                uL.append(tuple([HashableDict({"locator": self.__getLocatorRemote("chem_comp", tId), "fmt": "mmcif", "kwargs": kwD})]))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(uL)
@@ -600,7 +601,7 @@ class RepositoryProvider(object):
             #
             kwD = HashableDict({})
             for tId in tIdL:
-                uL.append([HashableDict({"locator": self.__getLocatorRemote("bird_chem_comp", tId), "fmt": "mmcif", "kwargs": kwD})])
+                uL.append(tuple([HashableDict({"locator": self.__getLocatorRemote("bird_chem_comp", tId), "fmt": "mmcif", "kwargs": kwD})]))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(uL)
@@ -920,7 +921,7 @@ class RepositoryProvider(object):
                                 prdD[prdId] = {"ccId": ccId, "ccPath": ccPathD[ccId]}
                                 ccPathD[ccPathD[ccId]] = {"ccId": ccId, "prdId": prdId}
                             else:
-                                logger.error("Bad ccId %r for BIRD %r", ccId, prdId)
+                                logger.warning("Missing ccId %r referenced in BIRD %r", ccId, prdId)
 
         except Exception as e:
             logger.exception("Failing with %s", str(e))

@@ -14,3 +14,4 @@
 28-Sep-2021 - V0.22 Add a more specific test for validation report xml data in CurrentHoldingsProvider.hasValidationReportData()
 29-Sep-2021 - V0.23 Make discoveryMode a configuration option rather than a constructor argument in RepositoryProvider() expose
                     inputIdCodeList as an argument for RepositoryProvider.getLocatorObjList()
+29-Sep-2021 - V0.24 Make locator objects for URI targets tuples.
