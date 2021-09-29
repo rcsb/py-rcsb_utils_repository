@@ -128,6 +128,7 @@ class RepositoryProviderTests(unittest.TestCase):
             locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
             pathList = rpP.getLocatorPaths(locatorObjList)
             self.assertEqual(len(locatorObjList), len(pathList))
+            logger.info("locatorObjList %r", locatorObjList)
             #
             lCount = len(pathList)
             idCodes = rpP.getLocatorIdcodes(contentType, locatorObjList)
@@ -137,6 +138,16 @@ class RepositoryProviderTests(unittest.TestCase):
             fL = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes, excludeIds=excludeList)
             logger.debug("fL (%d)", len(fL))
             self.assertEqual(lCount, len(fL) + len(excludeList))
+
+    def testRemoteSelectedRepoUtils(self):
+        rpP = RepositoryProvider(cfgOb=self.__cfgOb, discoveryMode="remote", numProc=self.__numProc, fileLimit=None, cachePath=self.__cachePath)
+        locL = rpP.getLocatorObjList(inputIdCodeList=["1kip", "4hhb"], contentType="pdbx_core", mergeContentTypes=["vrpt"])
+        self.assertEqual(len(locL), 2)
+        for loc in locL:
+            self.assertEqual(len(loc), 2)
+        #
+        fL = rpP.getLocatorObjList(inputIdCodeList=["ATP", "GTP"], contentType="chem_comp")
+        self.assertEqual(len(locL), 2)
 
 
 def repoSuite():

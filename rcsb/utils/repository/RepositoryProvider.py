@@ -21,6 +21,7 @@
 #   16-Sep-2019  jdw consolidate chem_comp_core with bird_chem_comp_core
 #   14-Feb-2020  jdw migrate to rcsb.utils.repository
 #   17-Sep-2021  jdw add remote repository access methods
+#   29-Sep-2021  jdw make default discoveryMode a configuration option add inputIdCodeList to getLocatorObjList()
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -69,13 +70,15 @@ class RepositoryProvider(object):
 
     """
 
-    def __init__(self, cfgOb, cachePath=None, discoveryMode="local", numProc=8, fileLimit=None, verbose=False):
+    def __init__(self, cfgOb, cachePath=None, numProc=8, fileLimit=None, verbose=False, discoveryMode=None):
         self.__fileLimit = fileLimit
         self.__numProc = numProc
         self.__verbose = verbose
         self.__cfgOb = cfgOb
-        self.__discoveryMode = discoveryMode if discoveryMode and discoveryMode in ["local", "remote"] else "local"
         self.__configName = self.__cfgOb.getDefaultSectionName()
+        #
+        self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
+        #
         self.__topCachePath = cachePath if cachePath else "."
         self.__cachePath = os.path.join(self.__topCachePath, self.__cfgOb.get("REPO_UTIL_CACHE_DIR", sectionName=self.__configName))
         #
@@ -85,12 +88,13 @@ class RepositoryProvider(object):
         logger.info("Discovery mode is %r", self.__discoveryMode)
         #
 
-    def getLocatorObjList(self, contentType, inputPathList=None, mergeContentTypes=None, excludeIds=None):
+    def getLocatorObjList(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None, excludeIds=None):
         """Convenience method to get the data path list for the input repository content type.
 
         Args:
             contentType (str): Repository content type (e.g. pdbx, chem_comp, bird, ...)
-            inputPathList (list, optional): path list that will be returned if provided.
+            inputPathList (list, optional): path list that will be returned if provided (discoveryMode=local).
+            inputIdCodeList (list, optional): locators will be returned for this ID code list (discoveryMode=remote).
             mergeContentTypes (list, optional): repository content types to combined with the
                                 primary content type.
             excludeIds (list or dict): exclude any locators for idCodes in this list or dictionary
@@ -113,7 +117,7 @@ class RepositoryProvider(object):
         if inputPathList:
             return self.__getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
         #
-        locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
+        locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
         #
         if excludeIds:
             fL = []

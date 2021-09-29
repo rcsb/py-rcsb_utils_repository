@@ -160,11 +160,11 @@ class CurrentHoldingsProvider(object):
         return self.__hasValidationReportData(self.__invD, entryId)
 
     def __hasValidationReportData(self, invD, entryId):
-        if entryId in invD:
-            tD = invD[entryId]
+        if entryId.upper() in invD:
+            tD = invD[entryId.upper()]
             if "validation_report" in tD:
                 for pth in tD["validation_report"]:
-                    if pth[:-7] == ".xml.gz":
+                    if pth[-7:] == ".xml.gz":
                         return True
         return False
 
