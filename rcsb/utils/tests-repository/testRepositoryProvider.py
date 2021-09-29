@@ -146,7 +146,7 @@ class RepositoryProviderTests(unittest.TestCase):
         for loc in locL:
             self.assertEqual(len(loc), 2)
         #
-        fL = rpP.getLocatorObjList(inputIdCodeList=["ATP", "GTP"], contentType="chem_comp")
+        locL = rpP.getLocatorObjList(inputIdCodeList=["ATP", "GTP"], contentType="chem_comp")
         self.assertEqual(len(locL), 2)
 
 
