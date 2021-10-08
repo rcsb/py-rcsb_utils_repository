@@ -1,14 +1,14 @@
 ##
-# File:    testRepositoryProvider.py
+# File:    testRepositoryModelProvider.py
 # Author:  J. Westbrook
-# Date:    19-Aug-2019
+# Date:    1-Oct-2021
 # Version: 0.001
 #
 # Updates:
 
 ##
 """
-Tests repository path and object utilities.
+Tests repository path and object utilities for structure models.
 """
 
 __docformat__ = "restructuredtext en"
@@ -58,12 +58,11 @@ class RepositoryModelProviderTests(unittest.TestCase):
     @unittest.skipUnless(doModelTests, "Skip model tests for now")
     def testGetModelPaths(self):
         """Test case - get model locator path utilities"""
-        #
-        aFMP = AlphaFoldModelProvider(cachePath=self.__cachePath, useCache=True, alphaFoldRequestedSpeciesFileList=["UP000008816_93061_STAA8.tar"])
+        aFMP = AlphaFoldModelProvider(cachePath=self.__cachePath, useCache=True, alphaFoldRequestedSpeciesFileList=["UP000000805_243232_METJA.tar"])
         ok = aFMP.testCache()
         self.assertTrue(ok)
 
-        for contentType in ["pdbx_core_model"]:
+        for contentType in ["pdbx_core_model_core"]:
             mergeContentTypes = None
             #
             locatorObjList = self.__rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)

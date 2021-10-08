@@ -69,8 +69,8 @@ class ScanRepoUtilTests(unittest.TestCase):
         logger.debug("Completed %s at %s (%.4f seconds)\n", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - self.__startTime)
 
     def testScanRepos(self):
-        """Test case - scan ihm data"""
-        for contentType in ["chem_comp_core", "bird_chem_comp_core", "bird_family", "pdbx_core", "ihm_dev"]:
+        """Test case - scan data"""
+        for contentType in ["chem_comp", "bird_family", "pdbx_core", "ihm_dev"]:
             ok = self.__testScanRepo(contentType=contentType, scanType="full")
             self.assertTrue(ok)
             ok = self.__testScanRepo(contentType=contentType, scanType="incr")

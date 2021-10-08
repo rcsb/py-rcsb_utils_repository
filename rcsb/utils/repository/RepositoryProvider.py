@@ -22,6 +22,8 @@
 #   14-Feb-2020  jdw migrate to rcsb.utils.repository
 #   17-Sep-2021  jdw add remote repository access methods
 #   29-Sep-2021  jdw make default discoveryMode a configuration option add inputIdCodeList to getLocatorObjList()
+#    8-Oct-2021  jdw pass configuration URLs to CurrentHoldingsProvider and RemoveHoldingsProvider
+#                    ValidationReportProvider() migrated to ValidationReportAdapter()
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -42,14 +44,14 @@ from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 from rcsb.utils.repository.CurrentHoldingsProvider import CurrentHoldingsProvider
 from rcsb.utils.repository.RemovedHoldingsProvider import RemovedHoldingsProvider
-from rcsb.utils.validation.ValidationReportProvider import ValidationReportProvider
+from rcsb.utils.validation.ValidationReportAdapter import ValidationReportAdapter
 
 logger = logging.getLogger(__name__)
 
 
 def toCifWrapper(xrt):
     dirPath = os.environ.get("_RP_DICT_PATH_")
-    vpr = ValidationReportProvider(dirPath=dirPath, useCache=True)
+    vpr = ValidationReportAdapter(dirPath=dirPath, useCache=True)
     vrd = vpr.getReader()
     return vrd.toCif(xrt)
 
@@ -78,9 +80,22 @@ class RepositoryProvider(object):
         self.__configName = self.__cfgOb.getDefaultSectionName()
         #
         self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
+        self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://ftp.wwpdb.org/pub")
+        self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://ftp.wwpdb.org/pub")
+        self.__baseUrlPDBDev = self.__cfgOb.getPath("PDBDEV_REPO_URL", sectionName=self.__configName, default="https://pdb-dev.wwpdb.org")
+        self.__edMapUrl = self.__cfgOb.getPath("RCSB_EDMAP_LIST_PATH", sectionName=self.__configName, default=None)
+        #
+        self.__kwD = {
+            "holdingsTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "holdings"),
+            "holdingsFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "holdings"),
+            "edmapsLocator": self.__edMapUrl,
+            "updateTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "data", "status", "latest"),
+            "updateFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "data", "status", "latest"),
+            "filterType": "assign-dates",
+        }
         #
         self.__topCachePath = cachePath if cachePath else "."
-        self.__cachePath = os.path.join(self.__topCachePath, self.__cfgOb.get("REPO_UTIL_CACHE_DIR", sectionName=self.__configName))
+        self.__cachePath = os.path.join(self.__topCachePath, "repo_util")
         #
         self.__mU = MarshalUtil(workPath=self.__cachePath)
         self.__chP = None
@@ -298,7 +313,7 @@ class RepositoryProvider(object):
                 outputLocatorList = inputPathList if inputPathList else self.__getIhmDevPathList()
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 outputLocatorList = inputPathList if inputPathList else []
-            elif contentType in ["pdbx_core_model", "pdbx_core_model_alphafold"]:
+            elif contentType in ["pdbx_comp_model_core"]:
                 outputLocatorList = inputPathList if inputPathList else self.__getModelPathList()
             else:
                 logger.warning("Unsupported contentType %s", contentType)
@@ -338,7 +353,7 @@ class RepositoryProvider(object):
             #
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 outputLocatorList = self.__getIhmDevPathList()
-            elif contentType in ["pdbx_core_model", "pdbx_core_model_alphafold"]:
+            elif contentType in ["pdbx_comp_model_core"]:
                 outputLocatorList = self.__getModelPathList()
             else:
                 logger.warning("Unsupported contentType %s", contentType)
@@ -393,38 +408,37 @@ class RepositoryProvider(object):
         """Convenience method to return the URI for a content type and cardinal identifier."""
         uri = None
         _ = repositoryLayout
-        baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName)
         try:
             idCodel = idCode.lower()
             if contentType == "bird":
                 # /pdb/refdata/bird/prd/1/
-                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "bird", "prd", idCode[-1], idCode + ".cif")
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "prd", idCode[-1], idCode + ".cif")
             elif contentType == "bird_family":
-                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "bird", "family", idCode[-1], idCode + ".cif")
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "family", idCode[-1], idCode + ".cif")
             elif contentType in ["bird_chem_comp"]:
-                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "bird", "prdcc", idCode[-1], idCode + ".cif")
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "prdcc", idCode[-1], idCode + ".cif")
             elif contentType in ["chem_comp", "chem_comp_core"]:
-                uri = os.path.join(baseUrlPDB, "pdb", "refdata", "chem_comp", idCode[-1], idCode, idCode + ".cif")
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "chem_comp", idCode[-1], idCode, idCode + ".cif")
             #
             elif contentType in ["pdbx", "pdbx_core"]:
                 # pdb/data/structures/divided/mmCIF
-                uri = os.path.join(baseUrlPDB, "pdb", "data", "structures", "divided", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "divided", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["vrpt", "validation_report"]:
                 # /pdb/validation_reports/
                 # https://ftp.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.xml.gz
-                uri = os.path.join(baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
                 # logger.info("uri %r", uri)
             #
             elif contentType in ["pdbx_obsolete"]:
                 # pdb/data/structures/obsolete/mmCIF/
-                uri = os.path.join(baseUrlPDB, "pdb", "data", "structures", "obsolete", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "obsolete", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 uri = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
             #
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                baseUrlPDBDev = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName)
+
                 # https://pdb-dev.wwpdb.org/cif/PDBDEV_00000001.cif
-                uri = os.path.join(baseUrlPDBDev, "cif", idCode + ".cif")
+                uri = os.path.join(self.__baseUrlPDBDev, "cif", idCode + ".cif")
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             else:
@@ -495,7 +509,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
             #
             tIdL = self.__chP.getEntryIdList()
             if idCodeList:
@@ -519,7 +533,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__rhP:
-                self.__rhP = RemovedHoldingsProvider(self.__cachePath, useCache=True)
+                self.__rhP = RemovedHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
             #
             tIdL = self.__rhP.getEntryByStatus("OBS")
             if idCodeList:
@@ -538,7 +552,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
             #
             tIdL = self.__chP.getBirdIdList()
             if idCodeList:
@@ -556,7 +570,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
             #
             tIdL = self.__chP.getBirdFamilyIdList()
             if idCodeList:
@@ -574,7 +588,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
             #
             tIdL = self.__chP.getChemCompIdList()
             if idCodeList:
@@ -592,7 +606,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__cachePath, useCache=True)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
             #
             tIdL = self.__chP.getBirdChemCompIdList()
             if idCodeList:
@@ -897,6 +911,7 @@ class RepositoryProvider(object):
                 ccId, _ = os.path.splitext(fn)
                 ccPathD[ccId] = ccPath
             logger.info("Chemical component path list (%d)", len(ccPathD))
+            #
             pthL = self.getLocatorPaths(self.__getLocatorList("bird"))
             logger.info("BIRD path list (%d)", len(pthL))
             for pth in pthL:
