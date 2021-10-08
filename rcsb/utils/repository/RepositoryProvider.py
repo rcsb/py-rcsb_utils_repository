@@ -24,6 +24,7 @@
 #   29-Sep-2021  jdw make default discoveryMode a configuration option add inputIdCodeList to getLocatorObjList()
 #    8-Oct-2021  jdw pass configuration URLs to CurrentHoldingsProvider and RemoveHoldingsProvider
 #                    ValidationReportProvider() migrated to ValidationReportAdapter()
+#    8-Oct-2021  jdw add warning messages for empty read/merge container results in method __mergeContainers()
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -248,15 +249,14 @@ class RepositoryProvider(object):
         return locatorList
 
     def __mergeContainers(self, locatorObj, fmt="mmcif", mergeTarget=0):
-        """Consolidate content in auxiliary files locatorObj[1:] into
-        locatorObj[0] container index 'mergeTarget'.
-
-        """
+        """Consolidate content in auxiliary files locatorObj[1:] into the locatorObj[0] container index 'mergeTarget'."""
         #
         cL = []
         try:
             if isinstance(locatorObj, str):
                 cL = self.__mU.doImport(locatorObj, fmt=fmt)
+                if not cL:
+                    logger.warning("locator %r returns empty container list.", locatorObj)
                 return cL if cL else []
             elif isinstance(locatorObj, (list, tuple)) and locatorObj:
                 dD = locatorObj[0]
@@ -269,9 +269,12 @@ class RepositoryProvider(object):
                         mergeL = rObj if rObj else []
                         for mc in mergeL:
                             cL[mergeTarget].merge(mc)
+                else:
+                    logger.warning("locator object with leading path %r returns empty container list (%r) ", dD["locator"], locatorObj)
                 #
                 return cL
             else:
+                logger.warning("non-comforming locator object %r", locatorObj)
                 return []
         except Exception as e:
             logger.exception("Failing for %r with %s", locatorObj, str(e))

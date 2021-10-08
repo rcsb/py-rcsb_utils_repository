@@ -17,3 +17,4 @@
 29-Sep-2021 - V0.24 Make locator objects for URI targets tuples.
  8-Oct-2021 - V0.25 Pass configuration URLs to CurrentHoldingsProvider and RemoveHoldingsProvider
                     ValidationReportProvider() migrated to ValidationReportAdapter()
+ 8-Oct-2021 - V0.26 Add warning messages for empty read/merge container results in method __mergeContainers()
