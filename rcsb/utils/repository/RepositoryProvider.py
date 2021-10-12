@@ -516,8 +516,10 @@ class RepositoryProvider(object):
             #
             tIdL = self.__chP.getEntryIdList()
             if idCodeList:
-                idCodeList = [t.upper() for t in idCodeList]
-                tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdD = dict.fromkeys(tIdL, True)
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                # idCodeList = [t.upper() for t in idCodeList]
+                # tIdL = list(set(tIdL).intersection(idCodeList))
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -540,8 +542,9 @@ class RepositoryProvider(object):
             #
             tIdL = self.__rhP.getEntryByStatus("OBS")
             if idCodeList:
-                idCodeList = [t.upper() for t in idCodeList]
-                tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdD = dict.fromkeys(tIdL, True)
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -559,8 +562,9 @@ class RepositoryProvider(object):
             #
             tIdL = self.__chP.getBirdIdList()
             if idCodeList:
-                idCodeList = [t.upper() for t in idCodeList]
-                tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdD = dict.fromkeys(tIdL, True)
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+
             #
             kwD = HashableDict({})
             for tId in tIdL:
@@ -577,8 +581,9 @@ class RepositoryProvider(object):
             #
             tIdL = self.__chP.getBirdFamilyIdList()
             if idCodeList:
-                idCodeList = [t.upper() for t in idCodeList]
-                tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdD = dict.fromkeys(tIdL, True)
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+
             #
             kwD = HashableDict({})
             for tId in tIdL:
@@ -595,8 +600,9 @@ class RepositoryProvider(object):
             #
             tIdL = self.__chP.getChemCompIdList()
             if idCodeList:
-                idCodeList = [t.upper() for t in idCodeList]
-                tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdD = dict.fromkeys(tIdL, True)
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+
             #
             kwD = HashableDict({})
             for tId in tIdL:
@@ -613,8 +619,8 @@ class RepositoryProvider(object):
             #
             tIdL = self.__chP.getBirdChemCompIdList()
             if idCodeList:
-                idCodeList = [t.upper() for t in idCodeList]
-                tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdD = dict.fromkeys(tIdL, True)
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
             #
             kwD = HashableDict({})
             for tId in tIdL:
