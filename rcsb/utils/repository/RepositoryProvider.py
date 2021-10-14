@@ -1109,7 +1109,9 @@ class RepositoryProvider(object):
     def __getModelPathList(self):
         """Return the list of computational models the current cached model repository.
 
-        File name template is: *.cif.gz
+        File name template is:  <modelDirPath>/<source>/*.cif.gz
+                                         -  or -
+                                <modelDirPath>/<hash>/<hash>/*.cif.gz
 
         """
         #
@@ -1122,6 +1124,12 @@ class RepositoryProvider(object):
                 logger.info("Using pattern %r", pattern)
                 for pth in glob.iglob(pattern, recursive=True):
                     pathList.append(pth)
+                if not pathList:
+                    pattern = os.path.join(modelDirPath, "*", "*", "*.cif.gz")
+                    logger.info("Using pattern %r", pattern)
+                    for pth in glob.iglob(pattern, recursive=True):
+                        pathList.append(pth)
+
             except Exception as e:
                 logger.exception("Failing search in %r with %s", modelDirPath, str(e))
             #
