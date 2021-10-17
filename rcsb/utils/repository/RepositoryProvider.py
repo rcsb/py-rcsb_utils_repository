@@ -1125,7 +1125,7 @@ class RepositoryProvider(object):
                 for pth in glob.iglob(pattern, recursive=True):
                     pathList.append(pth)
                 if not pathList:
-                    pattern = os.path.join(modelDirPath, "*", "*", "*.cif.gz")
+                    pattern = os.path.join(modelDirPath, "*", "*", "*", "*.cif.gz")
                     logger.info("Using pattern %r", pattern)
                     for pth in glob.iglob(pattern, recursive=True):
                         pathList.append(pth)

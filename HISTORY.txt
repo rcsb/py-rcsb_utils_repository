@@ -21,3 +21,4 @@
 12-Oct-2021 - V0.27 Preserve the order of processing for input idCodeLists in RepositoryProvider()
 14-Oct-2021 - V0.28 Extend the path search for model structures in RepositoryProvider()
 17-Oct-2021 - V0.29 Repath consolidated computed models directory in RepositoryProvider()
+17-Oct-2021 - V0.30 Update hierarchical search path for models in RepositoryProvider()
