@@ -25,6 +25,7 @@ import unittest
 from rcsb.utils.repository.RepositoryProvider import RepositoryProvider
 from rcsb.utils.config.ConfigUtil import ConfigUtil
 from rcsb.utils.insilico3d.AlphaFoldModelProvider import AlphaFoldModelProvider
+from rcsb.utils.io.FileUtil import FileUtil
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s]-%(module)s.%(funcName)s: %(message)s")
 logger = logging.getLogger()
@@ -58,9 +59,14 @@ class RepositoryModelProviderTests(unittest.TestCase):
     @unittest.skipUnless(doModelTests, "Skip model tests for now")
     def testGetModelPaths(self):
         """Test case - get model locator path utilities"""
-        aFMP = AlphaFoldModelProvider(cachePath=self.__cachePath, useCache=True, alphaFoldRequestedSpeciesFileList=["UP000000805_243232_METJA.tar"])
+        aFMP = AlphaFoldModelProvider(cachePath=self.__cachePath, useCache=True, alphaFoldRequestedSpeciesList=["Staphylococcus aureus"])
         ok = aFMP.testCache()
         self.assertTrue(ok)
+        ok = aFMP.reorganizeModelFiles()
+        fU = FileUtil()
+        if ok and fU.exists(os.path.join(self.__cachePath, "divided")):
+            fU.replace(os.path.join(self.__cachePath, "divided"), os.path.join(self.__cachePath, "computed-models"))
+            fU.remove(os.path.join(self.__cachePath, "AlphaFold"))
 
         for contentType in ["pdbx_core_model_core"]:
             mergeContentTypes = None

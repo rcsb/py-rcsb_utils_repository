@@ -20,3 +20,4 @@
  8-Oct-2021 - V0.26 Add warning messages for empty read/merge container results in method __mergeContainers()
 12-Oct-2021 - V0.27 Preserve the order of processing for input idCodeLists in RepositoryProvider()
 14-Oct-2021 - V0.28 Extend the path search for model structures in RepositoryProvider()
+17-Oct-2021 - V0.29 Repath consolidated computed models directory in RepositoryProvider()
