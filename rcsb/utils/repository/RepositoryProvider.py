@@ -478,6 +478,7 @@ class RepositoryProvider(object):
         pth = None
         try:
             if contentType == "bird":
+                print("\nHERE\n")
                 pth = self.__cfgOb.getPath("BIRD_REPO_PATH", sectionName=self.__configName)
             elif contentType == "bird_family":
                 pth = self.__cfgOb.getPath("BIRD_FAMILY_REPO_PATH", sectionName=self.__configName)
@@ -489,6 +490,8 @@ class RepositoryProvider(object):
                 pth = self.__cfgOb.getPath("PDBX_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["pdbx_obsolete"]:
                 pth = self.__cfgOb.getPath("PDBX_OBSOLETE_REPO_PATH", sectionName=self.__configName)
+            elif contentType in ["pdbx_comp_model_core"]:
+                pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_SANDBOX_PATH", sectionName=self.__configName)
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = self.__cachePath
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
@@ -1107,7 +1110,12 @@ class RepositoryProvider(object):
         #
 
     def __getModelPathList(self):
+        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
+
+    def __fetchModelPathList(self, topRepoPath, numProc=8):
         """Return the list of computational models the current cached model repository.
+
+        TODO: Make this method work in the same manner as __fetchEntryPathList, but generate the dataList for the computed model directory structure
 
         File name template is:  <modelDirPath>/<source>/*.cif.gz
                                          -  or -
@@ -1115,9 +1123,13 @@ class RepositoryProvider(object):
 
         """
         #
-        for modelType in ["computed-models"]:
-            modelDirPath = os.path.join(self.__topCachePath, modelType)
-            pathList = []
+        # print("\n topRepoPath:", topRepoPath)
+        #
+        pathList = []
+        # for modelType in ["computed-models"]:
+        #     modelDirPath = os.path.join(self.__topCachePath, modelType)
+        for modelType in ["AlphaFold", "ModBase", "ModelArchive"]:
+            modelDirPath = os.path.join(topRepoPath, modelType)
             logger.info("Searching for models in path %r", modelDirPath)
             try:
                 pattern = os.path.join(modelDirPath, "*", "*.cif.gz")
