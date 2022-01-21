@@ -1128,7 +1128,7 @@ class RepositoryProvider(object):
         pathList = []
         # for modelType in ["computed-models"]:
         #     modelDirPath = os.path.join(self.__topCachePath, modelType)
-        for modelType in ["AlphaFold", "ModBase", "ModelArchive"]:
+        for modelType in ["AlphaFold"]:  #, "ModBase", "ModelArchive"]:
             modelDirPath = os.path.join(topRepoPath, modelType)
             logger.info("Searching for models in path %r", modelDirPath)
             try:
