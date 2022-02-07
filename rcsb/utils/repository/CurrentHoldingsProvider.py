@@ -169,8 +169,10 @@ class CurrentHoldingsProvider(object):
     def __assembleEntryContentTypes(self, invD):
         # Mapping between repository content types and those used by RCSB.org
         contentTypeD = {
-            "2fo-fc Map": "2fo-fc Map",
-            "fo-fc Map": "fo-fc Map",
+            "2fofc Map": "2fo-fc Map",
+            "fofc Map": "fo-fc Map",
+            # "2fo-fc Map": "2fo-fc Map",
+            # "fo-fc Map": "fo-fc Map",
             "assembly_mmcif": "assembly mmCIF",
             "assembly_pdb": "assembly PDB",
             "combined_nmr_data_NEF": "Combined NMR data (NEF)",
@@ -185,7 +187,6 @@ class CurrentHoldingsProvider(object):
             # "pdbml_extatom":  "entry PDBML",
             # "pdbml_noatom": "entry PDBML",
             "structure_factors": "structure factors",
-            # "validation_report": "validation report",
             # Missing mappings
             # "validation report",
             # "validation slider image"
@@ -199,19 +200,27 @@ class CurrentHoldingsProvider(object):
         assemD = {}
         for entryId, tD in invD.items():
             assemS = set()
+            if entryId not in noPolymerL:
+                ctD.setdefault(entryId, []).append("FASTA sequence")
             for contentType, pthL in tD.items():
                 if contentType in contentTypeD:
                     ctD.setdefault(entryId, []).append(contentTypeD[contentType])
-                if contentType == "2fo-fc Map":
+                if contentType == "2fofc Map":
                     ctD.setdefault(entryId, []).append("Map Coefficients")
                 if contentType == "validation_report":
+                    # "/pdb/validation_reports/01/201l/201l_full_validation.pdf.gz"
+                    # "/pdb/validation_reports/01/201l/201l_multipercentile_validation.png.gz"
+                    # "/pdb/validation_reports/01/201l/201l_multipercentile_validation.svg.gz"
+                    # "/pdb/validation_reports/01/201l/201l_validation.pdf.gz"
+                    # "/pdb/validation_reports/01/201l/201l_validation.xml.gz"
+                    # "/pdb/validation_reports/01/201l/201l_validation_2fo-fc_map_coef.cif.gz"
+                    # "/pdb/validation_reports/01/201l/201l_validation_fo-fc_map_coef.cif.gz"
                     for pth in pthL:
-                        if pth[:-7] == ".pdf.gz":
+                        # Use "_full_validation.pdf.gz" instead of just ".pdf.gz" to avoid re-appending for non-full "_validation.pdf.gz" file
+                        if pth[-22:] == "full_validation.pdf.gz":
                             ctD.setdefault(entryId, []).append("validation report")
-                        elif pth[:-7] == ".svg.gz":
+                        elif pth[-7:] == ".svg.gz":
                             ctD.setdefault(entryId, []).append("validation slider image")
-                if entryId not in noPolymerL:
-                    ctD.setdefault(entryId, []).append("FASTA sequence")
                 if contentType == "assembly_mmcif":
                     # "/pdb/data/biounit/mmCIF/divided/a0/7a09-assembly1.cif.gz"
                     for pth in pthL:
@@ -282,7 +291,9 @@ class CurrentHoldingsProvider(object):
                 invD = self.__addMapContents(invD, mapD)
                 ofp = fp[:-3] if fp.endswith(".gz") else fp
                 ok = self.__mU.doExport(ofp, invD, fmt="json", indent=3)
-                logger.info("Updating the current entry contents (%r) in %r", ok, fp)
+                if fp.endswith(".gz"):
+                    logger.info("Updating the current entry contents (%r) in %r", ok, fp)
+                    fU.compress(ofp, fp)
         return invD
 
     def __reloadEntryIds(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):

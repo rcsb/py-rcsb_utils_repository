@@ -478,7 +478,6 @@ class RepositoryProvider(object):
         pth = None
         try:
             if contentType == "bird":
-                print("\nHERE\n")
                 pth = self.__cfgOb.getPath("BIRD_REPO_PATH", sectionName=self.__configName)
             elif contentType == "bird_family":
                 pth = self.__cfgOb.getPath("BIRD_FAMILY_REPO_PATH", sectionName=self.__configName)

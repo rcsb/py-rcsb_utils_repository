@@ -22,4 +22,5 @@
 14-Oct-2021 - V0.28 Extend the path search for model structures in RepositoryProvider()
 17-Oct-2021 - V0.29 Repath consolidated computed models directory in RepositoryProvider()
 17-Oct-2021 - V0.30 Update hierarchical search path for models in RepositoryProvider()
-13-Jan-2022 - V0.31 Update hierarchical search path for models in RepositoryProvider(), and to use configured PDBX_COMP_MODEL_SANDBOX_PATH value for topRepoPath
+13-Jan-2022 - V0.31 Update hierarchical search path for models in RepositoryProvider(), and use configured PDBX_COMP_MODEL_SANDBOX_PATH value for topRepoPath;
+                    Update CurrentHoldingsProvider class to provide correct content types for RCSB current holdings
