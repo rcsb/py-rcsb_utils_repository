@@ -965,7 +965,7 @@ class RepositoryProvider(object):
         ccOutputPathList = []
         if self.__discoveryMode == 'remote':
             for pth in self.__getChemCompUriList(idCodeList=None):
-                ccp = pth[0]['locator']   
+                ccp = pth[0]['locator']
                 if ccp not in ccPathD:
                     ccOutputPathList.append(ccp)
         else:
@@ -1139,7 +1139,7 @@ class RepositoryProvider(object):
         pathList = []
         # for modelType in ["computed-models"]:
         #     modelDirPath = os.path.join(self.__topCachePath, modelType)
-        for modelType in ["AlphaFold"]:  #, "ModBase", "ModelArchive"]:
+        for modelType in ["AlphaFold"]:  # , "ModBase", "ModelArchive"]:
             modelDirPath = os.path.join(topRepoPath, modelType)
             logger.info("Searching for models in path %r", modelDirPath)
             try:
