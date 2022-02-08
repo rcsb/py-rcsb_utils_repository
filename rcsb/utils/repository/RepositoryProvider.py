@@ -961,8 +961,20 @@ class RepositoryProvider(object):
         prdSmallMolCcD, ccPathD, prdStatusD = self.__buildBirdCcIndex()
         logger.info("PRD to CCD index length %d CCD map path length %d", len(prdSmallMolCcD), len(ccPathD))
         outputPathList = self.__mergeBirdRefData(prdSmallMolCcD, prdStatusD)
-        ccOutputPathList = [pth for pth in self.__getChemCompPathList() if pth not in ccPathD]
+        #
+        ccOutputPathList = []
+        if self.__discoveryMode == 'remote':
+            for pth in self.__getChemCompUriList(idCodeList=None):
+                ccp = pth[0]['locator']   
+                if ccp not in ccPathD:
+                    ccOutputPathList.append(ccp)
+        else:
+            ccOutputPathList = [pth for pth in self.__getChemCompPathList() if pth not in ccPathD]
+        #
         outputPathList.extend(ccOutputPathList)
+        logger.info("Total cc paths: %d", len(ccOutputPathList))
+        logger.info("Total bird_chem_comp paths: %d", len(outputPathList))
+        #
         return outputPathList
 
     def __mergeBirdRefData(self, prdSmallMolCcD, prdStatusD):

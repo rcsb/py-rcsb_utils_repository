@@ -175,7 +175,7 @@ class CurrentHoldingsProvider(object):
             # "fo-fc Map": "fo-fc Map",
             "assembly_mmcif": "assembly mmCIF",
             "assembly_pdb": "assembly PDB",
-            "combined_nmr_data_NEF": "Combined NMR data (NEF)",
+            "combined_nmr_data_nef": "Combined NMR data (NEF)",
             "combined_nmr_data_nmr-star": "Combined NMR data (NMR-STAR)",
             "mmcif": "entry mmCIF",
             "nmr_chemical_shifts": "NMR chemical shifts",
@@ -196,6 +196,8 @@ class CurrentHoldingsProvider(object):
         #
         noPolymerL = self.__eiP.getEntriesByPolymerEntityCount(count=0) if self.__eiP else []
         logger.info("Entries missing polymers (%d)", len(noPolymerL))
+        # for id in noPolymerL:
+        #    logger.info("id: %s", id)
         ctD = {}
         assemD = {}
         for entryId, tD in invD.items():
@@ -217,10 +219,12 @@ class CurrentHoldingsProvider(object):
                     # "/pdb/validation_reports/01/201l/201l_validation_fo-fc_map_coef.cif.gz"
                     for pth in pthL:
                         # Use "_full_validation.pdf.gz" instead of just ".pdf.gz" to avoid re-appending for non-full "_validation.pdf.gz" file
-                        if pth[-22:] == "full_validation.pdf.gz":
+                        if "full_validation.pdf.gz" in pth:
                             ctD.setdefault(entryId, []).append("validation report")
-                        elif pth[-7:] == ".svg.gz":
+                        elif "validation.svg.gz" in pth:
                             ctD.setdefault(entryId, []).append("validation slider image")
+                        elif "validation.cif.gz" in pth:
+                            ctD.setdefault(entryId, []).append("validation data mmCIF")
                 if contentType == "assembly_mmcif":
                     # "/pdb/data/biounit/mmCIF/divided/a0/7a09-assembly1.cif.gz"
                     for pth in pthL:
