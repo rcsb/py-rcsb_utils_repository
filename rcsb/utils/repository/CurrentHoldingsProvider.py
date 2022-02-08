@@ -169,11 +169,11 @@ class CurrentHoldingsProvider(object):
     def __assembleEntryContentTypes(self, invD):
         # Mapping between repository content types and those used by RCSB.org
         contentTypeD = {
-            "2fo-fc Map": "2fo-fc Map",
-            "fo-fc Map": "fo-fc Map",
+            "2fofc Map": "2fo-fc Map",
+            "fofc Map": "fo-fc Map",
             "assembly_mmcif": "assembly mmCIF",
             "assembly_pdb": "assembly PDB",
-            "combined_nmr_data_NEF": "Combined NMR data (NEF)",
+            "combined_nmr_data_nef": "Combined NMR data (NEF)",
             "combined_nmr_data_nmr-star": "Combined NMR data (NMR-STAR)",
             "mmcif": "entry mmCIF",
             "nmr_chemical_shifts": "NMR chemical shifts",
@@ -195,6 +195,8 @@ class CurrentHoldingsProvider(object):
         #
         noPolymerL = self.__eiP.getEntriesByPolymerEntityCount(count=0) if self.__eiP else []
         logger.info("Entries missing polymers (%d)", len(noPolymerL))
+        #for id in noPolymerL:
+        #    logger.info("id: %s", id)
         ctD = {}
         assemD = {}
         for entryId, tD in invD.items():
@@ -202,16 +204,16 @@ class CurrentHoldingsProvider(object):
             for contentType, pthL in tD.items():
                 if contentType in contentTypeD:
                     ctD.setdefault(entryId, []).append(contentTypeD[contentType])
-                if contentType == "2fo-fc Map":
+                if contentType == "2fofc Map":
                     ctD.setdefault(entryId, []).append("Map Coefficients")
                 if contentType == "validation_report":
                     for pth in pthL:
-                        if pth[:-7] == ".pdf.gz":
+                        if "full_validation.pdf.gz" in pth:
                             ctD.setdefault(entryId, []).append("validation report")
-                        elif pth[:-7] == ".svg.gz":
+                        elif "validation.svg.gz" in pth:
                             ctD.setdefault(entryId, []).append("validation slider image")
-                if entryId not in noPolymerL:
-                    ctD.setdefault(entryId, []).append("FASTA sequence")
+                        elif "validation.cif.gz" in pth:
+                            ctD.setdefault(entryId, []).append("validation data mmCIF")
                 if contentType == "assembly_mmcif":
                     # "/pdb/data/biounit/mmCIF/divided/a0/7a09-assembly1.cif.gz"
                     for pth in pthL:
@@ -225,6 +227,8 @@ class CurrentHoldingsProvider(object):
                         fn = os.path.basename(pth)
                         aId = fn.split(".")[1].replace("pdb", "")
                         assemS.add(aId)
+            if entryId not in noPolymerL:
+                ctD.setdefault(entryId, []).append("FASTA sequence")
             assemD[entryId] = list(assemS)
         return ctD, assemD
 
