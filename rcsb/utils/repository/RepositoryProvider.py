@@ -1121,7 +1121,8 @@ class RepositoryProvider(object):
         #
 
     def __getModelPathList(self):
-        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
+        # return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
+        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"))
 
     def __fetchModelPathList(self, topRepoPath):
         """Return the list of computational models the current cached model repository.
