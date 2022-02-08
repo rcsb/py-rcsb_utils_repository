@@ -1123,10 +1123,11 @@ class RepositoryProvider(object):
     def __getModelPathList(self):
         return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
 
-    def __fetchModelPathList(self, topRepoPath, numProc=8):
+    def __fetchModelPathList(self, topRepoPath):
         """Return the list of computational models the current cached model repository.
 
         TODO: Make this method work in the same manner as __fetchEntryPathList, but generate the dataList for the computed model directory structure
+              Also add to argument list: numProc=8
 
         File name template is:  <modelDirPath>/<source>/*.cif.gz
                                          -  or -
