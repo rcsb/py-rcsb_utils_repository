@@ -52,10 +52,10 @@ class UpdateHoldingsProvider(object):
 
         """
         _ = urlFallbackTarget
-        contentTypeList = ["pdb", "mr", "cs", "sf", "nmrdata"]
+        contentTypeList = ["pdb", "nmr", "cs", "sf", "nmrdata"]
         contentNameD = {
             "pdb": "coordinates",
-            "mr": "NMR restraints",
+            "nmr": "NMR restraints",
             "cs": "NMR chemical shifts",
             "sf": "structure factors",
             "nmrdata": "Combined NMR data (NEF)"
