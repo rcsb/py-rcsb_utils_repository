@@ -187,14 +187,14 @@ class RemovedHoldingsProvider(object):
         """
         # for transferred:
         ct1MapD = {
-            #"combined_nmr_data_nef": "Combined NMR data (NEF)",
-            #"combined_nmr_data_nmr-star": "Combined NMR data (NMR-STAR)",
-            #"nmr_chemical_shifts": "NMR chemical shifts",
-            #"nmr_restraints_v1": "NMR restraints",
-            #"mmcif": "coordinates",
+            # "combined_nmr_data_nef": "Combined NMR data (NEF)",
+            # "combined_nmr_data_nmr-star": "Combined NMR data (NMR-STAR)",
+            # "nmr_chemical_shifts": "NMR chemical shifts",
+            # "nmr_restraints_v1": "NMR restraints",
+            # "mmcif": "coordinates",
             "pdb": "coordinates",
-            #"pdbml": "coordinates",
-            #"structure_factors": "structure factors",
+            # "pdbml": "coordinates",
+            # "structure_factors": "structure factors",
         }
         # for removed:
         ct2MapD = {
@@ -220,7 +220,7 @@ class RemovedHoldingsProvider(object):
             "content_type": "repository_content_types",
             "deposit_date": "deposit_date",
             "remote_accession_code": "remote_accession_code",
-            #"title": "title",
+            # "title": "title",
         }
         insMapD = {
             "deposition_authors": "audit_authors",
@@ -310,7 +310,7 @@ class RemovedHoldingsProvider(object):
                     if oky == "id_codes_replaced_by":
                         if isinstance(qD["id_codes_replaced_by"], str):
                             qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"].upper()]
-                        else: 
+                        else:
                             qD["id_codes_replaced_by"] = [t.upper() for t in qD["id_codes_replaced_by"]]
                     #
                 removedD[entryId] = qD

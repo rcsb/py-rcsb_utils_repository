@@ -112,8 +112,10 @@ class RepositoryProviderTests(unittest.TestCase):
             self.assertEqual(len(locatorObjList), len(locatorObjList2))
             if contentType == "pdbx_core":
                 logger.info("pdbx-core locators %d", len(locatorObjList))
+                # logger.debug("pdbx-core locators %r", locatorObjList)
                 containerList = rpP.getContainerList(locatorObjList)
                 logger.info("pdbx-core containerList (%d)", len(containerList))
+                # logger.debug("pdbx-core containerList (%r)", containerList)
                 self.assertEqual(len(containerList), len(locatorObjList))
                 for container in containerList:
                     logger.debug("category names - (%d)", len(container.getObjNameList()))
