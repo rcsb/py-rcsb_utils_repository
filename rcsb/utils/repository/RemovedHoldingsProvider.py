@@ -185,16 +185,9 @@ class RemovedHoldingsProvider(object):
             dict: dictionary of all removed data
             dict: dictionary of superseding entries
         """
-        # for transferred:
+        # for transferred (which are the theoretical models, only pdb format is available):
         ct1MapD = {
-            # "combined_nmr_data_nef": "Combined NMR data (NEF)",
-            # "combined_nmr_data_nmr-star": "Combined NMR data (NMR-STAR)",
-            # "nmr_chemical_shifts": "NMR chemical shifts",
-            # "nmr_restraints_v1": "NMR restraints",
-            # "mmcif": "coordinates",
             "pdb": "coordinates",
-            # "pdbml": "coordinates",
-            # "structure_factors": "structure factors",
         }
         # for removed:
         ct2MapD = {
