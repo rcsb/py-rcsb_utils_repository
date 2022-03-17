@@ -185,18 +185,13 @@ class RemovedHoldingsProvider(object):
             dict: dictionary of all removed data
             dict: dictionary of superseding entries
         """
+        # for transferred (which are the theoretical models, only pdb format is available):
         ct1MapD = {
-            "combined_nmr_data_NEF": "Combined NMR data (NEF)",
-            "combined_nmr_data_nmr-star": "Combined NMR data (NMR-STAR)",
-            "nmr_chemical_shifts": "NMR chemical shifts",
-            "nmr_restraints_v1": "NMR restraints",
-            "mmcif": "coordinates",
             "pdb": "coordinates",
-            "pdbml": "coordinates",
-            "structure_factors": "structure factors",
         }
+        # for removed:
         ct2MapD = {
-            "combined_nmr_data_NEF": "Combined NMR data (NEF)",
+            "combined_nmr_data_nef": "Combined NMR data (NEF)",
             "combined_nmr_data_nmr-star": "Combined NMR data (NMR-STAR)",
             "nmr_chemical_shifts": "NMR chemical shifts",
             "nmr_restraints_v1": "NMR restraints V1",
@@ -214,18 +209,18 @@ class RemovedHoldingsProvider(object):
             "status_code": "status_code",
             "release_date": "release_date",
             "remote_repository_name": "remote_repository_name",
-            # "remote_repository_title": "remote_repository_title",
-            # "content_type": "repository_content_types",
+            "remote_repository_title": "title",
+            "content_type": "repository_content_types",
             "deposit_date": "deposit_date",
             "remote_accession_code": "remote_accession_code",
-            "title": "title",
+            # "title": "title",
         }
         insMapD = {
             "deposition_authors": "audit_authors",
             "deposit_date": "deposit_date",
             "superseded_by": "id_codes_replaced_by",
             "release_date": "release_date",
-            "remove_date": "remove_date",
+            "obsolete_date": "remove_date",
             "status_code": "status_code",
             "title": "title",
         }
@@ -235,11 +230,11 @@ class RemovedHoldingsProvider(object):
             "details": "details",
             "superseded_by": "id_codes_replaced_by",
             "release_date": "release_date",
-            "remove_date": "remove_date",
-            # "content_type": "repository_content_types",
+            "obsolete_date": "remove_date",
+            "content_type": "repository_content_types",
             "title": "title",
         }
-        dateFields = ["deposit_date", "release_date", "obsolete_date", "remove_date"]
+        dateFields = ["deposit_date", "release_date", "remove_date"]
         trsfD = {}
         insilicoD = {}
         auditAuthorD = {}
@@ -343,7 +338,9 @@ class RemovedHoldingsProvider(object):
             #  ---- superseded ----
             if entryId in replacesD:
                 superD[entryId] = {"id_codes_superseded": replacesD[entryId]}
-
+        logger.info("# of transferred entries: %d", len(trsfD))
+        logger.info("# of insilico entries: %d", len(insilicoD))
+        logger.info("# of removed entries: %d", len(removedD))
         return trsfD, insilicoD, auditAuthorD, removedD, superD
 
     def __isContentInsilico(self, ctD):

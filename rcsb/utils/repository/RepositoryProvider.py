@@ -489,6 +489,8 @@ class RepositoryProvider(object):
                 pth = self.__cfgOb.getPath("PDBX_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["pdbx_obsolete"]:
                 pth = self.__cfgOb.getPath("PDBX_OBSOLETE_REPO_PATH", sectionName=self.__configName)
+            elif contentType in ["pdbx_comp_model_core"]:
+                pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_SANDBOX_PATH", sectionName=self.__configName)
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = self.__cachePath
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
@@ -959,8 +961,20 @@ class RepositoryProvider(object):
         prdSmallMolCcD, ccPathD, prdStatusD = self.__buildBirdCcIndex()
         logger.info("PRD to CCD index length %d CCD map path length %d", len(prdSmallMolCcD), len(ccPathD))
         outputPathList = self.__mergeBirdRefData(prdSmallMolCcD, prdStatusD)
-        ccOutputPathList = [pth for pth in self.__getChemCompPathList() if pth not in ccPathD]
+        #
+        ccOutputPathList = []
+        if self.__discoveryMode == 'remote':
+            for pth in self.__getChemCompUriList(idCodeList=None):
+                ccp = pth[0]['locator']
+                if ccp not in ccPathD:
+                    ccOutputPathList.append(ccp)
+        else:
+            ccOutputPathList = [pth for pth in self.__getChemCompPathList() if pth not in ccPathD]
+        #
         outputPathList.extend(ccOutputPathList)
+        logger.info("Total cc paths: %d", len(ccOutputPathList))
+        logger.info("Total bird_chem_comp paths: %d", len(outputPathList))
+        #
         return outputPathList
 
     def __mergeBirdRefData(self, prdSmallMolCcD, prdStatusD):
@@ -1107,7 +1121,14 @@ class RepositoryProvider(object):
         #
 
     def __getModelPathList(self):
+        # return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
+        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"))
+
+    def __fetchModelPathList(self, topRepoPath):
         """Return the list of computational models the current cached model repository.
+
+        TODO: Make this method work in the same manner as __fetchEntryPathList, but generate the dataList for the computed model directory structure
+              Also add to argument list: numProc=8
 
         File name template is:  <modelDirPath>/<source>/*.cif.gz
                                          -  or -
@@ -1115,9 +1136,13 @@ class RepositoryProvider(object):
 
         """
         #
-        for modelType in ["computed-models"]:
-            modelDirPath = os.path.join(self.__topCachePath, modelType)
-            pathList = []
+        # print("\n topRepoPath:", topRepoPath)
+        #
+        pathList = []
+        # for modelType in ["computed-models"]:
+        #     modelDirPath = os.path.join(self.__topCachePath, modelType)
+        for modelType in ["AlphaFold"]:  # , "ModBase", "ModelArchive"]:
+            modelDirPath = os.path.join(topRepoPath, modelType)
             logger.info("Searching for models in path %r", modelDirPath)
             try:
                 pattern = os.path.join(modelDirPath, "*", "*.cif.gz")
