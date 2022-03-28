@@ -108,6 +108,7 @@ class RemovedHoldingsProvider(object):
 
     def getAllContentTypes(self):
         """Return the removed content types for the input entry identifier"""
+        entryId = None
         try:
             cS = set()
             for entryId, tD in self.__invD.items():
