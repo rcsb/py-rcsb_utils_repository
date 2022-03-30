@@ -78,6 +78,7 @@ class CurrentHoldingsProvider(object):
 
     def getAllContentTypes(self):
         """Return the all current content types for the repository"""
+        entryId = None
         try:
             tS = set()
             for entryId, tD in self.__invD.items():
@@ -171,8 +172,6 @@ class CurrentHoldingsProvider(object):
         contentTypeD = {
             "2fofc Map": "2fo-fc Map",
             "fofc Map": "fo-fc Map",
-            # "2fo-fc Map": "2fo-fc Map",
-            # "fo-fc Map": "fo-fc Map",
             "assembly_mmcif": "assembly mmCIF",
             "assembly_pdb": "assembly PDB",
             "combined_nmr_data_nef": "Combined NMR data (NEF)",
