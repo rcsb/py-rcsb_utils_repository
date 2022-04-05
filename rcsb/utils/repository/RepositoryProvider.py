@@ -25,6 +25,7 @@
 #    8-Oct-2021  jdw pass configuration URLs to CurrentHoldingsProvider and RemoveHoldingsProvider
 #                    ValidationReportProvider() migrated to ValidationReportAdapter()
 #    8-Oct-2021  jdw add warning messages for empty read/merge container results in method __mergeContainers()
+#    5-Apr-2022  dwp Add support for loading id code lists for bird_chem_comp_core (mainly used for Azure testing)
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -331,6 +332,7 @@ class RepositoryProvider(object):
     def __getLocatorListRemote(self, contentType, inputIdCodeList=None, mergeContentTypes=None):
         outputLocatorList = []
         idCodeList = inputIdCodeList if inputIdCodeList else []
+        logger.info("Getting remote locator list for contentType %s with idCodeList: %r", contentType, idCodeList)
         try:
             if contentType in ["bird", "bird_core"]:
                 outputLocatorList = self.__getBirdUriList(idCodeList=idCodeList)
@@ -340,8 +342,10 @@ class RepositoryProvider(object):
                 outputLocatorList = self.__getChemCompUriList(idCodeList=idCodeList)
             elif contentType in ["bird_chem_comp"]:
                 outputLocatorList = self.__getBirdChemCompUriList(idCodeList=idCodeList)
-            elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
+            elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"] and not self.__fileLimit:
                 outputLocatorList = self.mergeBirdAndChemCompRefData()
+            elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"] and self.__fileLimit:
+                outputLocatorList = self.mergeBirdAndChemCompRefDataWithInput(idCodeList=idCodeList)
             #
             elif contentType in ["pdbx", "pdbx_core"]:
                 if mergeContentTypes and "vrpt" in mergeContentTypes:
@@ -364,8 +368,10 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
 
+        logger.debug("outputLocatorList before applying fileLimit (%r): %r", self.__fileLimit, outputLocatorList)
         if self.__fileLimit:
             outputLocatorList = outputLocatorList[: self.__fileLimit]
+            logger.debug("outputLocatorList after applying fileLimit (%r): %r", self.__fileLimit, outputLocatorList)
 
         return sorted(outputLocatorList) if outputLocatorList and isinstance(outputLocatorList[0], str) else outputLocatorList
 
@@ -522,6 +528,7 @@ class RepositoryProvider(object):
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 # idCodeList = [t.upper() for t in idCodeList]
                 # tIdL = list(set(tIdL).intersection(idCodeList))
+                logger.info("idCodeList selected: %r", tIdL)
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -546,7 +553,7 @@ class RepositoryProvider(object):
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
-
+                logger.info("idCodeList selected: %r", tIdL)
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -566,7 +573,7 @@ class RepositoryProvider(object):
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
-
+                logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
             for tId in tIdL:
@@ -585,7 +592,7 @@ class RepositoryProvider(object):
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
-
+                logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
             for tId in tIdL:
@@ -604,7 +611,7 @@ class RepositoryProvider(object):
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
-
+                logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
             for tId in tIdL:
@@ -623,6 +630,7 @@ class RepositoryProvider(object):
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
             for tId in tIdL:
@@ -906,7 +914,7 @@ class RepositoryProvider(object):
 
         return prdD
 
-    def __buildBirdCcIndex(self):
+    def __buildBirdCcIndex(self, idCodeList=None):
         """Using information from the PRD pdbx_reference_molecule category to
         index the BIRDs corresponding small molecule correspondences
 
@@ -915,16 +923,20 @@ class RepositoryProvider(object):
         ccPathD = {}
         prdStatusD = {}
         try:
-            ccPathL = self.getLocatorPaths(self.__getLocatorList("chem_comp"))
+            ccPathL = self.getLocatorPaths(self.__getLocatorList("chem_comp", inputIdCodeList=idCodeList))
+            logger.debug("ccPathL: %r", ccPathL)
             ccPathD = {}
             for ccPath in ccPathL:
                 _, fn = os.path.split(ccPath)
                 ccId, _ = os.path.splitext(fn)
                 ccPathD[ccId] = ccPath
             logger.info("Chemical component path list (%d)", len(ccPathD))
+            # logger.info("Chemical component path list: %r", ccPathD)
             #
-            pthL = self.getLocatorPaths(self.__getLocatorList("bird"))
+            pthL = self.getLocatorPaths(self.__getLocatorList("bird", inputIdCodeList=idCodeList))
             logger.info("BIRD path list (%d)", len(pthL))
+            # logger.info("BIRD path list: %r", pthL)
+            #
             for pth in pthL:
                 containerL = self.__mU.doImport(pth, fmt="mmcif")
                 for container in containerL:
@@ -957,7 +969,7 @@ class RepositoryProvider(object):
     # -
     def mergeBirdAndChemCompRefData(self):
         # JDW note that this merging procedure expects access to all reference data -
-        # self.__fileLimit = None
+        # Use this method when:  self.__fileLimit = None
         prdSmallMolCcD, ccPathD, prdStatusD = self.__buildBirdCcIndex()
         logger.info("PRD to CCD index length %d CCD map path length %d", len(prdSmallMolCcD), len(ccPathD))
         outputPathList = self.__mergeBirdRefData(prdSmallMolCcD, prdStatusD)
@@ -977,7 +989,29 @@ class RepositoryProvider(object):
         #
         return outputPathList
 
-    def __mergeBirdRefData(self, prdSmallMolCcD, prdStatusD):
+    def mergeBirdAndChemCompRefDataWithInput(self, idCodeList=None):
+        # Use this method when:  self.__fileLimit != None
+        idCodeList = idCodeList if idCodeList else []
+        prdSmallMolCcD, ccPathD, prdStatusD = self.__buildBirdCcIndex(idCodeList=idCodeList)
+        logger.info("PRD to CCD index length %d CCD map path length %d", len(prdSmallMolCcD), len(ccPathD))
+        outputPathList = self.__mergeBirdRefData(prdSmallMolCcD, prdStatusD, idCodeList=idCodeList)
+        #
+        ccOutputPathList = []
+        if self.__discoveryMode == 'remote':
+            for pth in self.__getChemCompUriList(idCodeList=idCodeList):
+                ccp = pth[0]['locator']
+                if ccp not in ccPathD:
+                    ccOutputPathList.append(ccp)
+        else:
+            ccOutputPathList = [pth for pth in self.__getChemCompPathList() if pth not in ccPathD]
+        #
+        outputPathList.extend(ccOutputPathList)
+        logger.info("Total cc paths: %d", len(ccOutputPathList))
+        logger.info("Total bird_chem_comp paths: %d", len(outputPathList))
+        #
+        return outputPathList
+
+    def __mergeBirdRefData(self, prdSmallMolCcD, prdStatusD, idCodeList=None):
         """Consolidate all of the bird reference data in a single container.
 
         If the BIRD is a 'small molecule' type then also merge with the associated CC definition.
@@ -990,7 +1024,7 @@ class RepositoryProvider(object):
         outPathList = []
         iSkipUnreleased = 0
         try:
-            birdPathList = self.getLocatorPaths(self.__getLocatorList("bird"))
+            birdPathList = self.getLocatorPaths(self.__getLocatorList("bird", inputIdCodeList=idCodeList))
             birdPathD = {}
             for birdPath in birdPathList:
                 _, fn = os.path.split(birdPath)
@@ -999,7 +1033,7 @@ class RepositoryProvider(object):
             #
             logger.info("BIRD path length %d", len(birdPathD))
             logger.debug("BIRD keys %r", list(birdPathD.keys()))
-            birdCcPathList = self.getLocatorPaths(self.__getLocatorList("bird_chem_comp"))
+            birdCcPathList = self.getLocatorPaths(self.__getLocatorList("bird_chem_comp", inputIdCodeList=idCodeList))
             birdCcPathD = {}
             for birdCcPath in birdCcPathList:
                 _, fn = os.path.split(birdCcPath)
