@@ -1158,28 +1158,66 @@ class RepositoryProvider(object):
         # return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
         return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"))
 
-    def __fetchModelPathList(self, topRepoPath):
-        """Return the list of computational models the current cached model repository.
+    # def __fetchModelPathList(self, topRepoPath, numProc=8):
+    #     """Get the path list for computational models in the input cached model repository
 
-        TODO: Make this method work in the same manner as __fetchEntryPathList, but generate the dataList for the computed model directory structure
+    #     File name template is:  <modelDirPath>/<2-char source>/<hash>/<hash>/*.cif.gz
+    #                                      -  or -
+    #                             <modelDirPath>/<hash>/<hash>/*.cif.gz
+    #     """
+    #     ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
+    #     logger.info("Starting at %s", ts)
+    #     logger.info("CompModel topRepoPath: %s", topRepoPath)
+    #     startTime = time.time()
+    #     pathList = []
+    #     try:
+    #         dataList = []
+    #         anL = "abcdefghijklmnopqrstuvwxyz0123456789"
+    #         for a1 in anL:
+    #             for a2 in anL:
+    #                 hc = a1 + a2
+    #                 dataList.append(hc)
+    #                 hc = a2 + a1
+    #                 dataList.append(hc)
+    #         dataList = list(set(dataList))
+    #         #
+    #         optD = {}
+    #         optD["topRepoPath"] = topRepoPath
+    #         mpu = MultiProcUtil(verbose=self.__verbose)
+    #         mpu.setOptions(optionsD=optD)
+    #         mpu.set(workerObj=self, workerMethod="_entryPathWorker")
+    #         _, _, retLists, _ = mpu.runMulti(dataList=dataList, numProc=numProc, numResults=1)
+    #         pathList = retLists[0]
+    #         endTime0 = time.time()
+    #         logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
+    #     except Exception as e:
+    #         logger.exception("Failing with %s", str(e))
+    #     return self.__applyLimit(pathList)
+
+    def __fetchModelPathList(self, topRepoPath):
+        """Return the list of computational models in the current cached model repository.
+
+        TODO: Make this method work in the same manner as __fetchEntryPathList by adding new MPU method (like '_entryPathWorker'),
+              but generate the dataList for the computed model directory structure
               Also add to argument list: numProc=8
 
-        File name template is:  <modelDirPath>/<source>/*.cif.gz
+        File name template is:  <modelDirPath>/<2-char source>/<hash>/<hash>/*.cif.gz
                                          -  or -
                                 <modelDirPath>/<hash>/<hash>/*.cif.gz
 
         """
         #
-        # print("\n topRepoPath:", topRepoPath)
+        logger.info("CompModel topRepoPath: %s", topRepoPath)
         #
         pathList = []
         # for modelType in ["computed-models"]:
         #     modelDirPath = os.path.join(self.__topCachePath, modelType)
-        for modelType in ["AlphaFold"]:  # , "ModBase", "ModelArchive"]:
+        # for modelType in ["AlphaFold"]:  # , "ModBase", "ModelArchive"]:
+        for modelType in ["AF", "MA"]:  # also "MB"
             modelDirPath = os.path.join(topRepoPath, modelType)
             logger.info("Searching for models in path %r", modelDirPath)
             try:
-                pattern = os.path.join(modelDirPath, "*", "*.cif.gz")
+                pattern = os.path.join(modelDirPath, "*", "*", "*.cif.gz")
                 logger.info("Using pattern %r", pattern)
                 for pth in glob.iglob(pattern, recursive=True):
                     pathList.append(pth)
@@ -1191,6 +1229,8 @@ class RepositoryProvider(object):
 
             except Exception as e:
                 logger.exception("Failing search in %r with %s", modelDirPath, str(e))
+            #
+            logger.info("Found %d computed model files for modelType %s", len(pathList), modelType)
             #
         return self.__applyLimit(pathList)
 
