@@ -26,6 +26,7 @@
 #                    ValidationReportProvider() migrated to ValidationReportAdapter()
 #    8-Oct-2021  jdw add warning messages for empty read/merge container results in method __mergeContainers()
 #    5-Apr-2022  dwp Add support for loading id code lists for bird_chem_comp_core (mainly used for Azure testing)
+#   13-Apr-2022  dwp Update methods for obtaining list of computed-model files
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -36,13 +37,13 @@ __author__ = "John Westbrook"
 __email__ = "jwest@rcsb.rutgers.edu"
 __license__ = "Apache 2.0"
 
-import glob
 import logging
 import os
 import time
 
 from rcsb.utils.io.HashableDict import HashableDict
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 from rcsb.utils.repository.CurrentHoldingsProvider import CurrentHoldingsProvider
 from rcsb.utils.repository.RemovedHoldingsProvider import RemovedHoldingsProvider
@@ -100,6 +101,7 @@ class RepositoryProvider(object):
         self.__cachePath = os.path.join(self.__topCachePath, "repo_util")
         #
         self.__mU = MarshalUtil(workPath=self.__cachePath)
+        self.__fU = FileUtil(workPath=self.__cachePath)
         self.__chP = None
         self.__rhP = None
         logger.info("Discovery mode is %r", self.__discoveryMode)
@@ -515,6 +517,27 @@ class RepositoryProvider(object):
             logger.exception("Failing with %s", str(e))
         return pth
 
+    def __getCompModelCachPath(self):
+        """Convenience method to return path for computed-model cache file (json or pickle),
+        which contains the list of all computed-models in storage area.
+        """
+        pth = None
+        fmt = None
+        compressed = False
+        try:
+            pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_CACHE_LIST_PATH", sectionName=self.__configName)
+            if pth.endswith(".pic") or pth.endswith(".pic.gz"):
+                fmt = "pickle"
+            elif pth.endswith(".json") or pth.endswith(".json.gz"):
+                fmt = "json"
+            else:
+                logger.warning("Unsupported format/extension for computed-model cache file %s", pth)
+            if pth.endswith(".gz"):
+                compressed = True
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return pth, fmt, compressed
+
     # JDW ---  URI code ----
     def __getEntryUriList(self, idCodeList=None, mergeContentTypes=None):
         uL = []
@@ -756,6 +779,24 @@ class RepositoryProvider(object):
                 for name in files:
                     if (name.endswith(".cif.gz") and len(name) == 11) or (name.endswith(".cif") and len(name) == 8):
                         pathList.append(os.path.join(root, name))
+        return dataList, pathList, []
+
+    def _compModelPathWorker(self, dataList, procName, optionsD, workingDir):
+        """Return the list of computed-model entry file paths in the current computed-model storage area.
+
+        Args:
+            dataList (list): List of sub-directory paths to model files in the computed-model storage area, with paths starting at
+                             the model source prefix (e.g., ["AF/XJ/E6/AF_AFA0A385XJE6F1.cif.gz", "MA/PC/05/MA_MABAKCEPC0534.cif.gz."])
+            procName (str): worker process name
+            optionsD (dict): dictionary of additional options that worker can access
+            workingDir (str): path to working directory
+        """
+        _ = procName
+        _ = workingDir
+        topRepoPath = optionsD["topRepoPath"]
+        pathList = []
+        for modelSubPath in dataList:
+            pathList.append(os.path.join(topRepoPath, modelSubPath))
         return dataList, pathList, []
 
     def __getEntryPathList(self):
@@ -1155,84 +1196,101 @@ class RepositoryProvider(object):
         #
 
     def __getModelPathList(self):
-        # return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
-        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"))
+        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
+        # return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"))
 
-    # def __fetchModelPathList(self, topRepoPath, numProc=8):
-    #     """Get the path list for computational models in the input cached model repository
-
-    #     File name template is:  <modelDirPath>/<2-char source>/<hash>/<hash>/*.cif.gz
-    #                                      -  or -
-    #                             <modelDirPath>/<hash>/<hash>/*.cif.gz
-    #     """
-    #     ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
-    #     logger.info("Starting at %s", ts)
-    #     logger.info("CompModel topRepoPath: %s", topRepoPath)
-    #     startTime = time.time()
-    #     pathList = []
-    #     try:
-    #         dataList = []
-    #         anL = "abcdefghijklmnopqrstuvwxyz0123456789"
-    #         for a1 in anL:
-    #             for a2 in anL:
-    #                 hc = a1 + a2
-    #                 dataList.append(hc)
-    #                 hc = a2 + a1
-    #                 dataList.append(hc)
-    #         dataList = list(set(dataList))
-    #         #
-    #         optD = {}
-    #         optD["topRepoPath"] = topRepoPath
-    #         mpu = MultiProcUtil(verbose=self.__verbose)
-    #         mpu.setOptions(optionsD=optD)
-    #         mpu.set(workerObj=self, workerMethod="_entryPathWorker")
-    #         _, _, retLists, _ = mpu.runMulti(dataList=dataList, numProc=numProc, numResults=1)
-    #         pathList = retLists[0]
-    #         endTime0 = time.time()
-    #         logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
-    #     except Exception as e:
-    #         logger.exception("Failing with %s", str(e))
-    #     return self.__applyLimit(pathList)
-
-    def __fetchModelPathList(self, topRepoPath):
-        """Return the list of computational models in the current cached model repository.
+    def __fetchModelPathList(self, topRepoPath, numProc=8):
+        """Get the path list for computational models in the input cached model repository
 
         TODO: Make this method work in the same manner as __fetchEntryPathList by adding new MPU method (like '_entryPathWorker'),
               but generate the dataList for the computed model directory structure
               Also add to argument list: numProc=8
+        TODO: Add check of cache file to see if it changed between the last time data was uploaded, and if so, then upload new models
 
         File name template is:  <modelDirPath>/<2-char source>/<hash>/<hash>/*.cif.gz
                                          -  or -
                                 <modelDirPath>/<hash>/<hash>/*.cif.gz
-
         """
-        #
-        logger.info("CompModel topRepoPath: %s", topRepoPath)
+        ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
+        logger.info("Starting at %s", ts)
+        logger.info("Computed-models topRepoPath: %s", topRepoPath)
+        startTime = time.time()
         #
         pathList = []
-        # for modelType in ["computed-models"]:
-        #     modelDirPath = os.path.join(self.__topCachePath, modelType)
-        # for modelType in ["AlphaFold"]:  # , "ModBase", "ModelArchive"]:
-        for modelType in ["AF", "MA"]:  # also "MB"
-            modelDirPath = os.path.join(topRepoPath, modelType)
-            logger.info("Searching for models in path %r", modelDirPath)
-            try:
-                pattern = os.path.join(modelDirPath, "*", "*", "*.cif.gz")
-                logger.info("Using pattern %r", pattern)
-                for pth in glob.iglob(pattern, recursive=True):
-                    pathList.append(pth)
-                if not pathList:
-                    pattern = os.path.join(modelDirPath, "*", "*", "*", "*.cif.gz")
-                    logger.info("Using pattern %r", pattern)
-                    for pth in glob.iglob(pattern, recursive=True):
-                        pathList.append(pth)
-
-            except Exception as e:
-                logger.exception("Failing search in %r with %s", modelDirPath, str(e))
+        try:
+            compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
+            if not compModelCacheFile:
+                logger.info("Failed to determine path of computed-models cache file. Returning empty pathList.")
+                return pathList
+            if cacheFmt == "pickle" and compressed:
+                compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
+            compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
+            dataList = []
+            for modelId, modelD in compModelCacheD.items():
+                dataList.append(modelD["modelSubPath"])
+            logger.info("Computed-models loaded dataList length: %d", len(dataList))
             #
-            logger.info("Found %d computed model files for modelType %s", len(pathList), modelType)
-            #
+            optD = {}
+            optD["topRepoPath"] = topRepoPath
+            mpu = MultiProcUtil(verbose=self.__verbose)
+            mpu.setOptions(optionsD=optD)
+            mpu.set(workerObj=self, workerMethod="_compModelPathWorker")
+            _, _, retLists, _ = mpu.runMulti(dataList=dataList, numProc=numProc, numResults=1)
+            pathList = retLists[0]
+            endTime0 = time.time()
+            logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
         return self.__applyLimit(pathList)
+
+    # def __fetchModelPathList(self, topRepoPath):
+    #     """Return the list of computational models in the current cached model repository.
+    #
+    #     TODO: Make this method work in the same manner as __fetchEntryPathList by adding new MPU method (like '_entryPathWorker'),
+    #           but generate the dataList for the computed model directory structure
+    #           Also add to argument list: numProc=8
+    #     TODO: Add check of cache file to see if it changed between the last time data was uploaded, and if so, then upload new models
+    #
+    #     File name template is:  <modelDirPath>/<2-char source>/<hash>/<hash>/*.cif.gz
+    #                                      -  or -
+    #                             <modelDirPath>/<hash>/<hash>/*.cif.gz
+    #     """
+    #     #
+    #     logger.info("CompModel topRepoPath: %s", topRepoPath)
+    #     #
+    #     ## NEW WAY (relying on file containing paths to models on remote server, then join path with topRepoPath)
+    #     pathList = []
+    #     with open("/opt/load/data/CACHE/computed-models-cache-rev.json", "r") as f:
+    #         compModelDataD = json.load(f)
+    #     for k,v in compModelDataD.items():
+    #         pathList.append(v["modelPath"])
+    #
+    #     logger.info("CompModel pathList length: %d", len(pathList))
+    #     #
+    #     ## PREVIOUS WAY (relying on local path patterns)
+    #     # pathList = []
+    #     # # for modelType in ["computed-models"]:
+    #     # #     modelDirPath = os.path.join(self.__topCachePath, modelType)
+    #     # # for modelType in ["AlphaFold"]:  # , "ModBase", "ModelArchive"]:
+    #     # for modelType in ["AF", "MA"]:  # also "MB"
+    #     #     modelDirPath = os.path.join(topRepoPath, modelType)
+    #     #     logger.info("Searching for models in path %r", modelDirPath)
+    #     #     try:
+    #     #         pattern = os.path.join(modelDirPath, "*", "*", "*.cif.gz")
+    #     #         logger.info("Using pattern %r", pattern)
+    #     #         for pth in glob.iglob(pattern, recursive=True):
+    #     #             pathList.append(pth)
+    #     #         if not pathList:
+    #     #             pattern = os.path.join(modelDirPath, "*", "*", "*", "*.cif.gz")
+    #     #             logger.info("Using pattern %r", pattern)
+    #     #             for pth in glob.iglob(pattern, recursive=True):
+    #     #                 pathList.append(pth)
+    #     #     except Exception as e:
+    #     #         logger.exception("Failing search in %r with %s", modelDirPath, str(e))
+    #     #     #
+    #     #     logger.info("Found %d computed model files for modelType %s", len(pathList), modelType)
+    #         #
+    #     return self.__applyLimit(pathList)
 
     def __getIhmDevPathList(self):
         return self.__fetchIhmDevPathList(self.__getRepoLocalPath("ihm_dev"))
