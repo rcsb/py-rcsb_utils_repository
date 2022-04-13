@@ -517,27 +517,6 @@ class RepositoryProvider(object):
             logger.exception("Failing with %s", str(e))
         return pth
 
-    def __getCompModelCachPath(self):
-        """Convenience method to return path for computed-model cache file (json or pickle),
-        which contains the list of all computed-models in storage area.
-        """
-        pth = None
-        fmt = None
-        compressed = False
-        try:
-            pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_CACHE_LIST_PATH", sectionName=self.__configName)
-            if pth.endswith(".pic") or pth.endswith(".pic.gz"):
-                fmt = "pickle"
-            elif pth.endswith(".json") or pth.endswith(".json.gz"):
-                fmt = "json"
-            else:
-                logger.warning("Unsupported format/extension for computed-model cache file %s", pth)
-            if pth.endswith(".gz"):
-                compressed = True
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        return pth, fmt, compressed
-
     # JDW ---  URI code ----
     def __getEntryUriList(self, idCodeList=None, mergeContentTypes=None):
         uL = []
@@ -795,8 +774,8 @@ class RepositoryProvider(object):
         _ = workingDir
         topRepoPath = optionsD["topRepoPath"]
         pathList = []
-        for modelSubPath in dataList:
-            pathList.append(os.path.join(topRepoPath, modelSubPath))
+        for modelPath in dataList:
+            pathList.append(os.path.join(topRepoPath, modelPath))
         return dataList, pathList, []
 
     def __getEntryPathList(self):
@@ -1227,7 +1206,7 @@ class RepositoryProvider(object):
             compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
             dataList = []
             for modelId, modelD in compModelCacheD.items():
-                dataList.append(modelD["modelSubPath"])
+                dataList.append(modelD["modelPath"])
             logger.info("Computed-models loaded dataList length: %d", len(dataList))
             #
             optD = {}
@@ -1242,6 +1221,27 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(pathList)
+
+    def __getCompModelCachPath(self):
+        """Convenience method to return path for computed-model cache file (json or pickle),
+        which contains the list of all computed-models in storage area.
+        """
+        pth = None
+        fmt = None
+        compressed = False
+        try:
+            pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_CACHE_LIST_PATH", sectionName=self.__configName)
+            if pth.endswith(".pic") or pth.endswith(".pic.gz"):
+                fmt = "pickle"
+            elif pth.endswith(".json") or pth.endswith(".json.gz"):
+                fmt = "json"
+            else:
+                logger.warning("Unsupported format/extension for computed-model cache file %s", pth)
+            if pth.endswith(".gz"):
+                compressed = True
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return pth, fmt, compressed
 
     # def __fetchModelPathList(self, topRepoPath):
     #     """Return the list of computational models in the current cached model repository.
