@@ -1176,14 +1176,10 @@ class RepositoryProvider(object):
 
     def __getModelPathList(self):
         return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
-        # return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"))
 
     def __fetchModelPathList(self, topRepoPath, numProc=8):
         """Get the path list for computational models in the input cached model repository
 
-        TODO: Make this method work in the same manner as __fetchEntryPathList by adding new MPU method (like '_entryPathWorker'),
-              but generate the dataList for the computed model directory structure
-              Also add to argument list: numProc=8
         TODO: Add check of cache file to see if it changed between the last time data was uploaded, and if so, then upload new models
 
         File name template is:  <modelDirPath>/<2-char source>/<hash>/<hash>/*.cif.gz
