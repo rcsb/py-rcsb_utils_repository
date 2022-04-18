@@ -22,7 +22,7 @@
 14-Oct-2021 - V0.28 Extend the path search for model structures in RepositoryProvider()
 17-Oct-2021 - V0.29 Repath consolidated computed models directory in RepositoryProvider()
 17-Oct-2021 - V0.30 Update hierarchical search path for models in RepositoryProvider()
-17-Mar-2022 - V0.31 Update hierarchical search path for models in RepositoryProvider(), and use configured PDBX_COMP_MODEL_SANDBOX_PATH value for topRepoPath;
+17-Mar-2022 - V0.31 Update hierarchical search path for models in RepositoryProvider(), and use configured PDBX_COMP_MODEL_REPO_PATH value for topRepoPath;
                     Update HoldingsProvider classes to address issues with remote data loading
 28-Mar-2022 - V0.32 Resolve Pylint issues
  5-Apr-2022 - V0.33 Add support in RepositoryProvider for loading id code lists for bird_chem_comp_core (mainly used for Azure testing)
