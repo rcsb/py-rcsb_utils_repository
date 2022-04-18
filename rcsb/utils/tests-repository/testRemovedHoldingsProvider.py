@@ -79,7 +79,7 @@ class RemovedHoldingsProviderTests(unittest.TestCase):
             for entryId in rmP.getRemovedEntries():
                 sL = rmP.getSupersededBy(entryId)
                 if len(sL) > 1:
-                    logger.info("(%r) %r", entryId, sL)
+                    logger.info("Superseded list for entryId (%r): %r", entryId, sL)
                 scS.add(rmP.getStatusCode(entryId))
             logger.info("status codes %r", scS)
         except Exception as e:
