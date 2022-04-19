@@ -320,7 +320,7 @@ class RepositoryProvider(object):
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 outputLocatorList = inputPathList if inputPathList else []
             elif contentType in ["pdbx_comp_model_core"]:
-                outputLocatorList = inputPathList if inputPathList else self.__getModelPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getCompModelPathList()
             else:
                 logger.warning("Unsupported contentType %s", contentType)
         except Exception as e:
@@ -363,7 +363,7 @@ class RepositoryProvider(object):
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 outputLocatorList = self.__getIhmDevPathList()
             elif contentType in ["pdbx_comp_model_core"]:
-                outputLocatorList = self.__getModelPathList()
+                outputLocatorList = self.__getCompModelPathList()
             else:
                 logger.warning("Unsupported contentType %s", contentType)
 
@@ -1174,7 +1174,7 @@ class RepositoryProvider(object):
         return outPathList
         #
 
-    def __getModelPathList(self):
+    def __getCompModelPathList(self):
         return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
 
     def __fetchModelPathList(self, topRepoPath, numProc=8):
@@ -1236,6 +1236,30 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return pth, fmt, compressed
+
+    def getCompModelIdMap(self):
+        return self.__fetchCompModelIdMap()
+
+    def __fetchCompModelIdMap(self):
+        """Get the ID mapping between the source model IDs and internal model identifiers for computational models.
+        """
+        #
+        compModelIdMapD = {}
+        try:
+            compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
+            if not compModelCacheFile:
+                logger.info("Failed to determine path of computed-models cache file. Returning empty compModelIdMapD.")
+                return compModelIdMapD
+            if cacheFmt == "pickle" and compressed:
+                compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
+            compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
+            for internalModelId, modelD in compModelCacheD.items():
+                compModelIdMapD.update({internalModelId: modelD["sourceId"]})
+            logger.info("Computed-models mapped ID length: %d", len(compModelIdMapD))
+            #
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return compModelIdMapD
 
     def __getIhmDevPathList(self):
         return self.__fetchIhmDevPathList(self.__getRepoLocalPath("ihm_dev"))
