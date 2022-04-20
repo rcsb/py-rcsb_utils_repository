@@ -3,7 +3,7 @@
 #  Date:  18-May-2021 jdw
 #
 #  Updates:
-#
+#   18-Apr-2022  dwp Update getSupersededBy method to recursively return all superseded entries
 ##
 """Provide an inventory of removed repository content.
 """
@@ -51,13 +51,22 @@ class RemovedHoldingsProvider(object):
     def getSupersededBy(self, entryId):
         """Return the superseding entry ids"""
         try:
+            sL = []
             if isinstance(self.__invD[entryId.upper()]["superseded_by"], str):
-                return [self.__invD[entryId.upper()]["superseded_by"]]
+                sL = [self.__invD[entryId.upper()]["superseded_by"]]
             else:
-                return self.__invD[entryId.upper()]["superseded_by"]
+                sL = self.__invD[entryId.upper()]["superseded_by"]
+            if len(sL) > 0:
+                for recursiveEntry in sL:
+                    if isinstance(self.__invD[recursiveEntry.upper()]["superseded_by"], str):
+                        sL = sL + [self.__invD[recursiveEntry.upper()]["superseded_by"]]
+                    elif isinstance(self.__invD[recursiveEntry.upper()]["superseded_by"], list):
+                        sL = sL + self.__invD[recursiveEntry.upper()]["superseded_by"]
+                    else:
+                        break
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
-        return []
+        return sL
 
     def getRemovedEntries(self):
         return list(self.__invD.keys())
@@ -129,7 +138,7 @@ class RemovedHoldingsProvider(object):
         #
         if useCache and self.__mU.exists(fp):
             invD = self.__mU.doImport(fp, fmt="json")
-            logger.debug("Reading cached inventory (%d)", len(invD))
+            logger.info("Reading cached inventory (%d) from file %s", len(invD), fp)
         else:
             logger.info("Fetch inventory from %s", urlTarget)
             ok = fU.get(urlTarget, fp)
@@ -156,7 +165,6 @@ class RemovedHoldingsProvider(object):
                         rmD[entryId] = {"status": "REMOVED", "status_code": "OBS", "id_code_replaced_by_latest": sL[-1]}
                     else:
                         rmD[entryId] = {"status": "REMOVED", "status_code": "OBS"}
-
                 else:
                     rmD[entryId] = {"status": "REMOVED", "status_code": "OBS"}
         return rmD

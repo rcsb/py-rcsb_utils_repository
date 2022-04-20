@@ -26,6 +26,7 @@
 #                    ValidationReportProvider() migrated to ValidationReportAdapter()
 #    8-Oct-2021  jdw add warning messages for empty read/merge container results in method __mergeContainers()
 #    5-Apr-2022  dwp Add support for loading id code lists for bird_chem_comp_core (mainly used for Azure testing)
+#   13-Apr-2022  dwp Update methods for obtaining list of computed-model files
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -36,13 +37,13 @@ __author__ = "John Westbrook"
 __email__ = "jwest@rcsb.rutgers.edu"
 __license__ = "Apache 2.0"
 
-import glob
 import logging
 import os
 import time
 
 from rcsb.utils.io.HashableDict import HashableDict
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
 from rcsb.utils.repository.CurrentHoldingsProvider import CurrentHoldingsProvider
 from rcsb.utils.repository.RemovedHoldingsProvider import RemovedHoldingsProvider
@@ -100,6 +101,7 @@ class RepositoryProvider(object):
         self.__cachePath = os.path.join(self.__topCachePath, "repo_util")
         #
         self.__mU = MarshalUtil(workPath=self.__cachePath)
+        self.__fU = FileUtil(workPath=self.__cachePath)
         self.__chP = None
         self.__rhP = None
         logger.info("Discovery mode is %r", self.__discoveryMode)
@@ -318,7 +320,7 @@ class RepositoryProvider(object):
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 outputLocatorList = inputPathList if inputPathList else []
             elif contentType in ["pdbx_comp_model_core"]:
-                outputLocatorList = inputPathList if inputPathList else self.__getModelPathList()
+                outputLocatorList = inputPathList if inputPathList else self.__getCompModelPathList()
             else:
                 logger.warning("Unsupported contentType %s", contentType)
         except Exception as e:
@@ -361,7 +363,7 @@ class RepositoryProvider(object):
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 outputLocatorList = self.__getIhmDevPathList()
             elif contentType in ["pdbx_comp_model_core"]:
-                outputLocatorList = self.__getModelPathList()
+                outputLocatorList = self.__getCompModelPathList()
             else:
                 logger.warning("Unsupported contentType %s", contentType)
 
@@ -496,7 +498,7 @@ class RepositoryProvider(object):
             elif contentType in ["pdbx_obsolete"]:
                 pth = self.__cfgOb.getPath("PDBX_OBSOLETE_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["pdbx_comp_model_core"]:
-                pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_SANDBOX_PATH", sectionName=self.__configName)
+                pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = self.__cachePath
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
@@ -756,6 +758,24 @@ class RepositoryProvider(object):
                 for name in files:
                     if (name.endswith(".cif.gz") and len(name) == 11) or (name.endswith(".cif") and len(name) == 8):
                         pathList.append(os.path.join(root, name))
+        return dataList, pathList, []
+
+    def _compModelPathWorker(self, dataList, procName, optionsD, workingDir):
+        """Return the list of computed-model entry file paths in the current computed-model storage area.
+
+        Args:
+            dataList (list): List of sub-directory paths to model files in the computed-model storage area, with paths starting at
+                             the model source prefix (e.g., ["AF/XJ/E6/AF_AFA0A385XJE6F1.cif.gz", "MA/PC/05/MA_MABAKCEPC0534.cif.gz."])
+            procName (str): worker process name
+            optionsD (dict): dictionary of additional options that worker can access
+            workingDir (str): path to working directory
+        """
+        _ = procName
+        _ = workingDir
+        topRepoPath = optionsD["topRepoPath"]
+        pathList = []
+        for modelPath in dataList:
+            pathList.append(os.path.join(topRepoPath, modelPath))
         return dataList, pathList, []
 
     def __getEntryPathList(self):
@@ -1154,45 +1174,92 @@ class RepositoryProvider(object):
         return outPathList
         #
 
-    def __getModelPathList(self):
-        # return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
-        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"))
+    def __getCompModelPathList(self):
+        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
 
-    def __fetchModelPathList(self, topRepoPath):
-        """Return the list of computational models the current cached model repository.
+    def __fetchModelPathList(self, topRepoPath, numProc=8):
+        """Get the path list for computational models in the input cached model repository
 
-        TODO: Make this method work in the same manner as __fetchEntryPathList, but generate the dataList for the computed model directory structure
-              Also add to argument list: numProc=8
+        TO-DO: Add check of cache file to see if it changed between the last time data was uploaded, and if so, then upload new models
 
-        File name template is:  <modelDirPath>/<source>/*.cif.gz
-                                         -  or -
-                                <modelDirPath>/<hash>/<hash>/*.cif.gz
-
+        File name template is:  <topRepoPath>/<2-char source>/<hash>/<hash>/*.cif.gz
         """
-        #
-        # print("\n topRepoPath:", topRepoPath)
+        ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
+        logger.info("Starting at %s", ts)
+        logger.info("Computed-models topRepoPath: %s", topRepoPath)
+        startTime = time.time()
         #
         pathList = []
-        # for modelType in ["computed-models"]:
-        #     modelDirPath = os.path.join(self.__topCachePath, modelType)
-        for modelType in ["AlphaFold"]:  # , "ModBase", "ModelArchive"]:
-            modelDirPath = os.path.join(topRepoPath, modelType)
-            logger.info("Searching for models in path %r", modelDirPath)
-            try:
-                pattern = os.path.join(modelDirPath, "*", "*.cif.gz")
-                logger.info("Using pattern %r", pattern)
-                for pth in glob.iglob(pattern, recursive=True):
-                    pathList.append(pth)
-                if not pathList:
-                    pattern = os.path.join(modelDirPath, "*", "*", "*", "*.cif.gz")
-                    logger.info("Using pattern %r", pattern)
-                    for pth in glob.iglob(pattern, recursive=True):
-                        pathList.append(pth)
-
-            except Exception as e:
-                logger.exception("Failing search in %r with %s", modelDirPath, str(e))
+        try:
+            compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
+            if not compModelCacheFile:
+                logger.info("Failed to determine path of computed-models cache file. Returning empty pathList.")
+                return pathList
+            if cacheFmt == "pickle" and compressed:
+                compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
+            compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
+            dataList = []
+            for _, modelD in compModelCacheD.items():
+                dataList.append(modelD["modelPath"])
+            logger.info("Computed-models loaded dataList length: %d", len(dataList))
             #
+            optD = {}
+            optD["topRepoPath"] = topRepoPath
+            mpu = MultiProcUtil(verbose=self.__verbose)
+            mpu.setOptions(optionsD=optD)
+            mpu.set(workerObj=self, workerMethod="_compModelPathWorker")
+            _, _, retLists, _ = mpu.runMulti(dataList=dataList, numProc=numProc, numResults=1)
+            pathList = retLists[0]
+            endTime0 = time.time()
+            logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
         return self.__applyLimit(pathList)
+
+    def __getCompModelCachPath(self):
+        """Convenience method to return path for computed-model cache file (json or pickle),
+        which contains the list of all computed-models in storage area.
+        """
+        pth = None
+        fmt = None
+        compressed = False
+        try:
+            pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_CACHE_LIST_PATH", sectionName=self.__configName)
+            if pth.endswith(".pic") or pth.endswith(".pic.gz"):
+                fmt = "pickle"
+            elif pth.endswith(".json") or pth.endswith(".json.gz"):
+                fmt = "json"
+            else:
+                logger.warning("Unsupported format/extension for computed-model cache file %s", pth)
+            if pth.endswith(".gz"):
+                compressed = True
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return pth, fmt, compressed
+
+    def getCompModelIdMap(self):
+        return self.__fetchCompModelIdMap()
+
+    def __fetchCompModelIdMap(self):
+        """Get the ID mapping between the source model IDs and internal model identifiers for computational models.
+        """
+        #
+        compModelIdMapD = {}
+        try:
+            compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
+            if not compModelCacheFile:
+                logger.info("Failed to determine path of computed-models cache file. Returning empty compModelIdMapD.")
+                return compModelIdMapD
+            if cacheFmt == "pickle" and compressed:
+                compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
+            compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
+            for internalModelId, modelD in compModelCacheD.items():
+                compModelIdMapD.update({internalModelId: modelD["sourceId"]})
+            logger.info("Computed-models mapped ID length: %d", len(compModelIdMapD))
+            #
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+        return compModelIdMapD
 
     def __getIhmDevPathList(self):
         return self.__fetchIhmDevPathList(self.__getRepoLocalPath("ihm_dev"))
