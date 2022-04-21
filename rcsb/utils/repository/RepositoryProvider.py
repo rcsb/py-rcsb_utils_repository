@@ -1254,7 +1254,7 @@ class RepositoryProvider(object):
                 compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
             compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
             for internalModelId, modelD in compModelCacheD.items():
-                compModelIdMapD.update({internalModelId: modelD["sourceId"]})
+                compModelIdMapD.update({modelD["sourceId"]: internalModelId})
             logger.info("Computed-models mapped ID length: %d", len(compModelIdMapD))
             #
         except Exception as e:

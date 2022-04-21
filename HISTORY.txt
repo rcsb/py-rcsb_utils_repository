@@ -28,3 +28,4 @@
  5-Apr-2022 - V0.33 Add support in RepositoryProvider for loading id code lists for bird_chem_comp_core (mainly used for Azure testing)
 13-Apr-2022 - V0.34 Update RepositoryProvider methods for obtaining list of computed-model files;
                     Update getSupersededBy method to recursively return all superseded entries
+20-Apr-2022 - V0.35 Fix issue in RepositoryProvider for mapping source and internal computed-model IDs
