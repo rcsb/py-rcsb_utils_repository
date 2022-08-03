@@ -249,6 +249,15 @@ class RepositoryProvider(object):
             #
             locatorList = locObjL
         # -
+        if contentType in ["pdbx_comp_model_core"]:
+            locObjL = []
+            for inputPath in inputPathList:
+                if isinstance(inputPath, str):
+                    if inputPath.strip() in locatorList:
+                        locObjL.append(inputPath.strip())
+            #
+            locatorList = locObjL
+        # -
         return locatorList
 
     def __mergeContainers(self, locatorObj, fmt="mmcif", mergeTarget=0):
