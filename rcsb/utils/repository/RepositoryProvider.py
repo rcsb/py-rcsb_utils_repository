@@ -27,6 +27,7 @@
 #    8-Oct-2021  jdw add warning messages for empty read/merge container results in method __mergeContainers()
 #    5-Apr-2022  dwp Add support for loading id code lists for bird_chem_comp_core (mainly used for Azure testing)
 #   13-Apr-2022  dwp Update methods for obtaining list of computed-model files
+#   03-Aug-2022  dwp Enable retrieval of specific computed-model files with input
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -246,6 +247,15 @@ class RepositoryProvider(object):
                     logger.error("Unexpected output locator type %r", locator)
                     lObj = locator
                 locObjL.append(lObj)
+            #
+            locatorList = locObjL
+        # -
+        if contentType in ["pdbx_comp_model_core"]:
+            locObjL = []
+            for inputPath in inputPathList:
+                if isinstance(inputPath, str):
+                    if inputPath.strip() in locatorList:
+                        locObjL.append(inputPath.strip())
             #
             locatorList = locObjL
         # -
