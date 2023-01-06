@@ -30,3 +30,4 @@
                     Update getSupersededBy method to recursively return all superseded entries
 20-Apr-2022 - V0.35 Fix issue in RepositoryProvider for mapping source and internal computed-model IDs
 03-Aug-2022 - V0.36 Enable retrieval of specific model files with input
+23-Dec-2022 - V0.37 Configuration changes to support tox 4
