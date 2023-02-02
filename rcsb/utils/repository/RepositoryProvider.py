@@ -344,7 +344,7 @@ class RepositoryProvider(object):
     def __getLocatorListRemote(self, contentType, inputIdCodeList=None, mergeContentTypes=None):
         outputLocatorList = []
         idCodeList = inputIdCodeList if inputIdCodeList else []
-        logger.info("Getting remote locator list for contentType %s with idCodeList: %r", contentType, idCodeList)
+        logger.info("Getting remote locator list for contentType %s with idCodeList length (%d)", contentType, len(idCodeList))
         try:
             if contentType in ["bird", "bird_core"]:
                 outputLocatorList = self.__getBirdUriList(idCodeList=idCodeList)
@@ -540,7 +540,7 @@ class RepositoryProvider(object):
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 # idCodeList = [t.upper() for t in idCodeList]
                 # tIdL = list(set(tIdL).intersection(idCodeList))
-                logger.info("idCodeList selected: %r", tIdL)
+                logger.debug("idCodeList selected: %r", tIdL)
             #
             for tId in tIdL:
                 kwD = HashableDict({})
