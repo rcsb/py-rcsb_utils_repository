@@ -27,7 +27,8 @@
 #    8-Oct-2021  jdw add warning messages for empty read/merge container results in method __mergeContainers()
 #    5-Apr-2022  dwp Add support for loading id code lists for bird_chem_comp_core (mainly used for Azure testing)
 #   13-Apr-2022  dwp Update methods for obtaining list of computed-model files
-#   03-Aug-2022  dwp Enable retrieval of specific computed-model files with input
+#    3-Aug-2022  dwp Enable retrieval of specific computed-model files with input
+#    2-Feb-2023  dwp add support for requesting specific inputIdCodeList/idCodeList for CSMs
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -344,7 +345,7 @@ class RepositoryProvider(object):
     def __getLocatorListRemote(self, contentType, inputIdCodeList=None, mergeContentTypes=None):
         outputLocatorList = []
         idCodeList = inputIdCodeList if inputIdCodeList else []
-        logger.info("Getting remote locator list for contentType %s with idCodeList: %r", contentType, idCodeList)
+        logger.info("Getting remote locator list for contentType %s with idCodeList length (%d)", contentType, len(idCodeList))
         try:
             if contentType in ["bird", "bird_core"]:
                 outputLocatorList = self.__getBirdUriList(idCodeList=idCodeList)
@@ -373,7 +374,7 @@ class RepositoryProvider(object):
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 outputLocatorList = self.__getIhmDevPathList()
             elif contentType in ["pdbx_comp_model_core"]:
-                outputLocatorList = self.__getCompModelPathList()
+                outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList)
             else:
                 logger.warning("Unsupported contentType %s", contentType)
 
@@ -540,7 +541,7 @@ class RepositoryProvider(object):
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 # idCodeList = [t.upper() for t in idCodeList]
                 # tIdL = list(set(tIdL).intersection(idCodeList))
-                logger.info("idCodeList selected: %r", tIdL)
+                logger.debug("idCodeList selected: %r", tIdL)
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -1184,10 +1185,10 @@ class RepositoryProvider(object):
         return outPathList
         #
 
-    def __getCompModelPathList(self):
-        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), numProc=self.__numProc)
+    def __getCompModelPathList(self, idCodeList=None):
+        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), idCodeList=idCodeList, numProc=self.__numProc)
 
-    def __fetchModelPathList(self, topRepoPath, numProc=8):
+    def __fetchModelPathList(self, topRepoPath, idCodeList=None, numProc=8):
         """Get the path list for computational models in the input cached model repository
 
         TO-DO: Add check of cache file to see if it changed between the last time data was uploaded, and if so, then upload new models
@@ -1199,6 +1200,7 @@ class RepositoryProvider(object):
         logger.info("Computed-models topRepoPath: %s", topRepoPath)
         startTime = time.time()
         #
+        idCodeList = idCodeList if idCodeList else []
         pathList = []
         try:
             compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
@@ -1208,9 +1210,14 @@ class RepositoryProvider(object):
             if cacheFmt == "pickle" and compressed:
                 compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
             compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
+            #
             dataList = []
-            for _, modelD in compModelCacheD.items():
-                dataList.append(modelD["modelPath"])
+            if len(idCodeList) > 0:
+                for mId in idCodeList:
+                    dataList.append(compModelCacheD[mId]["modelPath"])
+            else:
+                for _, modelD in compModelCacheD.items():
+                    dataList.append(modelD["modelPath"])
             logger.info("Computed-models loaded dataList length: %d", len(dataList))
             #
             optD = {}
