@@ -28,7 +28,7 @@ class CurrentHoldingsProvider(object):
         self.__cachePath = cachePath
         self.__dirPath = os.path.join(cachePath, "holdings")
         #
-        edMapsLocator = kwargs.get("edmapsLocator", "https://raw.githubusercontent.com/rcsb/py-rcsb_exdb_assets/development/fall_back/edmaps.json")
+        edMapsLocator = kwargs.get("edmapsLocator", "https://raw.githubusercontent.com/rcsb/py-rcsb_exdb_assets/master/fall_back/edmaps.json")
         #
         baseUrl = kwargs.get("holdingsTargetUrl", "https://ftp.wwpdb.org/pub/pdb/holdings")
         fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://ftp.wwpdb.org/pub/pdb/holdings")
