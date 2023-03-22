@@ -32,3 +32,4 @@
 03-Aug-2022 - V0.36 Enable retrieval of specific model files with input
 23-Dec-2022 - V0.37 Configuration changes to support tox 4
 14-Feb-2023 - V0.38 Add support for requesting specific inputIdCodeList/idCodeList for CSMs
+22-Mar-2023 - V0.39 Update references to py-rcsb_exdb_assets master branch
