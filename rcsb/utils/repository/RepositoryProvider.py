@@ -85,8 +85,8 @@ class RepositoryProvider(object):
         self.__configName = self.__cfgOb.getDefaultSectionName()
         #
         self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
-        self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://ftp.wwpdb.org/pub")
-        self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://ftp.wwpdb.org/pub")
+        self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
+        self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
         self.__baseUrlPDBDev = self.__cfgOb.getPath("PDBDEV_REPO_URL", sectionName=self.__configName, default="https://pdb-dev.wwpdb.org")
         self.__edMapUrl = self.__cfgOb.getPath("RCSB_EDMAP_LIST_PATH", sectionName=self.__configName, default=None)
         #
@@ -447,7 +447,7 @@ class RepositoryProvider(object):
                 uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "divided", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["vrpt", "validation_report"]:
                 # /pdb/validation_reports/
-                # https://ftp.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.xml.gz
+                # https://files.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.xml.gz
                 uri = os.path.join(self.__baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
                 # logger.info("uri %r", uri)
             #
