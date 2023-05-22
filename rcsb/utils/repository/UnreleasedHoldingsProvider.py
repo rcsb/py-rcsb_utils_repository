@@ -25,8 +25,8 @@ class UnreleasedHoldingsProvider(object):
         self.__dirPath = os.path.join(cachePath, "holdings")
         self.__filterType = kwargs.get("filterType", "")
         self.__assignDates = "assign-dates" in self.__filterType
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
-        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
+        baseUrl = kwargs.get("holdingsTargetUrl", "https://prerelease.k8s.rcsb.org/pub/pdb/holdings")
+        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://prerelease.k8s.rcsb.org/pub/pdb/holdings")
         #
         urlTarget = os.path.join(baseUrl, "unreleased_entries.json.gz")
         urlFallbackTarget = os.path.join(fallbackUrl, "unreleased_entries.json.gz")

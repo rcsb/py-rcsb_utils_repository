@@ -30,8 +30,8 @@ class CurrentHoldingsProvider(object):
         #
         edMapsLocator = kwargs.get("edmapsLocator", "https://raw.githubusercontent.com/rcsb/py-rcsb_exdb_assets/master/fall_back/edmaps.json")
         #
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
-        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
+        baseUrl = kwargs.get("holdingsTargetUrl", "https://prerelease.k8s.rcsb.org/pub/pdb/holdings")
+        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://prerelease.k8s.rcsb.org/pub/pdb/holdings")
         #
         entryUrlContent = os.path.join(baseUrl, "current_file_holdings.json.gz")
         entryUrlFallbackContent = os.path.join(fallbackUrl, "current_file_holdings.json.gz")
