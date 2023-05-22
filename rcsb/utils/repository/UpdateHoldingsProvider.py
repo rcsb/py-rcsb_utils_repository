@@ -23,8 +23,8 @@ class UpdateHoldingsProvider(object):
     def __init__(self, cachePath, useCache, **kwargs):
         self.__dirPath = os.path.join(cachePath, "holdings")
         #
-        baseUrl = kwargs.get("updateTargetUrl", "https://ftp.wwpdb.org/pub/pdb/data/status/latest")
-        fallbackUrl = kwargs.get("updateFallbackUrl", "https://ftp.wwpdb.org/pub/pdb/data/status/latest")
+        baseUrl = kwargs.get("updateTargetUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
+        fallbackUrl = kwargs.get("updateFallbackUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
         #
         self.__mU = MarshalUtil(workPath=self.__dirPath)
         self.__updD = self.__reloadUpdateLists(baseUrl, fallbackUrl, self.__dirPath, useCache=useCache)
