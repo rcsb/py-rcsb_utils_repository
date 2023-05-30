@@ -25,8 +25,8 @@ class RemovedHoldingsProvider(object):
         self.__dirPath = os.path.join(self.__cachePath, "holdings")
         self.__filterType = kwargs.get("filterType", "")
         self.__assignDates = "assign-dates" in self.__filterType
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://prerelease.k8s.rcsb.org/pub/pdb/holdings")
-        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://prerelease.k8s.rcsb.org/pub/pdb/holdings")
+        baseUrl = kwargs.get("holdingsTargetUrl", "https://prerelease.k8s.rcsb.org/pdb/holdings")
+        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://prerelease.k8s.rcsb.org/pdb/holdings")
         #
         urlTarget = os.path.join(baseUrl, "all_removed_entries.json.gz")
         urlFallbackTarget = os.path.join(fallbackUrl, "all_removed_entries.json.gz")
