@@ -75,9 +75,10 @@ class UpdateHoldingsProvider(object):
                     for contentType in contentTypeList:
                         fp1 = os.path.join(urlTarget, updateType + "." + contentType)
                         if not self.__mU.exists(fp1):
-                            logger.debug("skipping missing resource %r", fp1)
+                            logger.info("skipping missing resource %r", fp1)
                             continue
                         entryIdL = self.__mU.doImport(fp1, "list")
+                        logger.info("read %r of length %d", fp1, len(entryIdL))
                         #
                         for entryId in entryIdL:
                             entryId = entryId.strip().upper()
