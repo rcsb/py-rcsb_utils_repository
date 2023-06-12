@@ -3,6 +3,7 @@
 #  Date:  18-Sep-2021 jdw
 #
 #  Updates:
+#   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
 #
 ##
 """Provide inventory of current repository update.
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 class UpdateHoldingsProvider(object):
     """Provide inventory of the current repository update."""
 
-    def __init__(self, cachePath, useCache, **kwargs):
+    def __init__(self, cachePath, useCache=False, **kwargs):
         self.__dirPath = os.path.join(cachePath, "holdings")
         #
         baseUrl = kwargs.get("updateTargetUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
