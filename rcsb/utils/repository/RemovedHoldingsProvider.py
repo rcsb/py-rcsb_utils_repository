@@ -4,6 +4,7 @@
 #
 #  Updates:
 #   18-Apr-2022  dwp Update getSupersededBy method to recursively return all superseded entries
+#   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
 ##
 """Provide an inventory of removed repository content.
 """
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RemovedHoldingsProvider(object):
     """Provide an inventory of removed repository content."""
 
-    def __init__(self, cachePath, useCache, **kwargs):
+    def __init__(self, cachePath, useCache=False, **kwargs):
         self.__cachePath = cachePath
         self.__dirPath = os.path.join(self.__cachePath, "holdings")
         self.__filterType = kwargs.get("filterType", "")

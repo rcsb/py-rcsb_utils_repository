@@ -3,6 +3,7 @@
 #  Date:  24-Sep-2021 jdw
 #
 #  Updates:
+#   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
 #
 ##
 """Provide an inventory of unreleased repository content.
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 class UnreleasedHoldingsProvider(object):
     """Provide an inventory of unreleased repository content."""
 
-    def __init__(self, cachePath, useCache, **kwargs):
+    def __init__(self, cachePath, useCache=False, **kwargs):
         self.__dirPath = os.path.join(cachePath, "holdings")
         self.__filterType = kwargs.get("filterType", "")
         self.__assignDates = "assign-dates" in self.__filterType

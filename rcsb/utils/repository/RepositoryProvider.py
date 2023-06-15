@@ -29,6 +29,7 @@
 #   13-Apr-2022  dwp Update methods for obtaining list of computed-model files
 #    3-Aug-2022  dwp Enable retrieval of specific computed-model files with input
 #    2-Feb-2023  dwp add support for requesting specific inputIdCodeList/idCodeList for CSMs
+#   12-Jun-2023  dwp disable useCache for holdings files to force fresh re-download
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -533,7 +534,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
             tIdL = self.__chP.getEntryIdList()
             if idCodeList:
@@ -560,7 +561,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__rhP:
-                self.__rhP = RemovedHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
+                self.__rhP = RemovedHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
             tIdL = self.__rhP.getEntryByStatus("OBS")
             if idCodeList:
@@ -580,7 +581,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
             tIdL = self.__chP.getBirdIdList()
             if idCodeList:
@@ -599,7 +600,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
             tIdL = self.__chP.getBirdFamilyIdList()
             if idCodeList:
@@ -618,7 +619,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
             tIdL = self.__chP.getChemCompIdList()
             if idCodeList:
@@ -637,7 +638,7 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
-                self.__chP = CurrentHoldingsProvider(self.__topCachePath, useCache=True, **self.__kwD)
+                self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
             tIdL = self.__chP.getBirdChemCompIdList()
             if idCodeList:
