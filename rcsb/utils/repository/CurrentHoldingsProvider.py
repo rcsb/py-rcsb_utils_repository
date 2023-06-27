@@ -3,6 +3,7 @@
 #  Date:  18-May-2021 jdw
 #
 #  Updates:
+#   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
 #
 ##
 """Provide inventory of current repository content.
@@ -24,14 +25,14 @@ logger = logging.getLogger(__name__)
 class CurrentHoldingsProvider(object):
     """Provide inventory of current repository content."""
 
-    def __init__(self, cachePath, useCache, **kwargs):
+    def __init__(self, cachePath, useCache=False, **kwargs):
         self.__cachePath = cachePath
         self.__dirPath = os.path.join(cachePath, "holdings")
         #
         edMapsLocator = kwargs.get("edmapsLocator", "https://raw.githubusercontent.com/rcsb/py-rcsb_exdb_assets/master/fall_back/edmaps.json")
         #
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://ftp.wwpdb.org/pub/pdb/holdings")
-        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://ftp.wwpdb.org/pub/pdb/holdings")
+        baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
+        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
         #
         entryUrlContent = os.path.join(baseUrl, "current_file_holdings.json.gz")
         entryUrlFallbackContent = os.path.join(fallbackUrl, "current_file_holdings.json.gz")
