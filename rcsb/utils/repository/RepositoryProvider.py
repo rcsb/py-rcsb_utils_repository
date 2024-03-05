@@ -1213,23 +1213,6 @@ class RepositoryProvider(object):
         idCodeList = idCodeList if idCodeList else []
         pathList = []
         try:
-            # compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
-            # if not compModelCacheFile:
-            #     logger.info("Failed to determine path of computed-models cache file. Returning empty pathList.")
-            #     return pathList
-            # if cacheFmt == "pickle" and compressed:
-            #     compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
-            # compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
-            # #
-            # dataList = []
-            # if len(idCodeList) > 0:
-            #     for mId in idCodeList:
-            #         dataList.append(compModelCacheD[mId]["modelPath"])
-            # else:
-            #     for _, modelD in compModelCacheD.items():
-            #         dataList.append(modelD["modelPath"])
-            # logger.info("Computed-models loaded dataList length: %d", len(dataList))
-            #
             optD = {}
             optD["topRepoPath"] = topRepoPath
             optD["modelFormat"] = ".bcif.gz" if "bcif" in fmt.lower() else ".cif.gz"
@@ -1243,51 +1226,6 @@ class RepositoryProvider(object):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(pathList)
-
-    # def __getCompModelCachPath(self):
-    #     """Convenience method to return path for computed-model cache file (json or pickle),
-    #     which contains the list of all computed-models in storage area.
-    #     """
-    #     pth = None
-    #     fmt = None
-    #     compressed = False
-    #     try:
-    #         pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_CACHE_LIST_PATH", sectionName=self.__configName)
-    #         if pth.endswith(".pic") or pth.endswith(".pic.gz"):
-    #             fmt = "pickle"
-    #         elif pth.endswith(".json") or pth.endswith(".json.gz"):
-    #             fmt = "json"
-    #         else:
-    #             logger.warning("Unsupported format/extension for computed-model cache file %s", pth)
-    #         if pth.endswith(".gz"):
-    #             compressed = True
-    #     except Exception as e:
-    #         logger.exception("Failing with %s", str(e))
-    #     return pth, fmt, compressed
-
-    # def getCompModelIdMap(self):
-    #     return self.__fetchCompModelIdMap()
-
-    # def __fetchCompModelIdMap(self):
-    #     """Get the ID mapping between the source model IDs and internal model identifiers for computational models.
-    #     """
-    #     #
-    #     compModelIdMapD = {}
-    #     try:
-    #         compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
-    #         if not compModelCacheFile:
-    #             logger.info("Failed to determine path of computed-models cache file. Returning empty compModelIdMapD.")
-    #             return compModelIdMapD
-    #         if cacheFmt == "pickle" and compressed:
-    #             compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
-    #         compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
-    #         for internalModelId, modelD in compModelCacheD.items():
-    #             compModelIdMapD.update({modelD["sourceId"]: internalModelId})
-    #         logger.info("Computed-models mapped ID length: %d", len(compModelIdMapD))
-    #         #
-    #     except Exception as e:
-    #         logger.exception("Failing with %s", str(e))
-    #     return compModelIdMapD
 
     def __getIhmDevPathList(self):
         return self.__fetchIhmDevPathList(self.__getRepoLocalPath("ihm_dev"))
