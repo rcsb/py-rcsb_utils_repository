@@ -35,3 +35,4 @@
 22-Mar-2023 - V0.39 Update references to py-rcsb_exdb_assets master branch
 19-May-2023 - V0.40 Update DNS to PDB archive
 12-Jun-2023 - V0.41 Disable useCache for holdings files to force re-download
+05-Mar-2024 - V0.42 Adjust RepositoryProvider to support BCIF loading and CSM scaling
