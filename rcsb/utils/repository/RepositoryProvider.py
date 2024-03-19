@@ -31,6 +31,8 @@
 #    2-Feb-2023  dwp add support for requesting specific inputIdCodeList/idCodeList for CSMs
 #   12-Jun-2023  dwp disable useCache for holdings files to force fresh re-download
 #    5-Mar-2024  dwp Adjustments to support BCIF loading and CSM scaling (eliminate need to import CSM holdings file)
+#   19-Mar-2024  dwp Raise exception and return empty list if not all dataContainers are properly read from file
+#                    in __mergeContainers() (e.g., if mmCIF file is read in but validation report fails)
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -270,14 +272,17 @@ class RepositoryProvider(object):
         cL = []
         try:
             if isinstance(locatorObj, str):
+                # This is followed for CSMs and anything else that doesn't have an associated validation report file
                 if locatorObj.lower().endswith(".bcif.gz") or locatorObj.lower().endswith(".bcif"):
                     fmt = "bcif"
                 logger.debug("locatorObj %s fmt %s", locatorObj, fmt)
                 cL = self.__mU.doImport(locatorObj, fmt=fmt)
                 if not cL:
-                    logger.warning("locator %r fmt %s returns empty container list.", locatorObj, fmt)
-                return cL if cL else []
+                    logger.error("locator %r fmt %s returned empty container list.", locatorObj, fmt)
+                    raise ValueError("locator %r fmt %s returned empty container list" % (locatorObj, fmt))
+            #
             elif isinstance(locatorObj, (list, tuple)) and locatorObj:
+                # This is followed for Experimental mmCIF files (anything with have an associated validation report file)
                 dD = locatorObj[0]
                 kw = dD["kwargs"]
                 cL = self.__mU.doImport(dD["locator"], fmt=dD["fmt"], **kw)
@@ -286,19 +291,23 @@ class RepositoryProvider(object):
                         kw = dD["kwargs"]
                         rObj = self.__mU.doImport(dD["locator"], fmt=dD["fmt"], **kw)
                         mergeL = rObj if rObj else []
+                        if not mergeL:
+                            logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
+                            raise ValueError("locator object with leading path %r returned empty container list (%r)" % (dD["locator"], locatorObj))
                         for mc in mergeL:
                             cL[mergeTarget].merge(mc)
                 else:
-                    logger.warning("locator object with leading path %r returns empty container list (%r) ", dD["locator"], locatorObj)
-                #
-                return cL
+                    logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
+                    raise ValueError("locator object with leading path %r returned empty container list (%r)" % (dD["locator"], locatorObj))
+            #
             else:
                 logger.warning("non-comforming locator object %r", locatorObj)
-                return []
+        #
         except Exception as e:
             logger.exception("Failing for %r with %s", locatorObj, str(e))
-
-        return cL
+            return []
+        #
+        return cL if cL else []
 
     def __getLocatorList(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None):
         if self.__discoveryMode == "local":
