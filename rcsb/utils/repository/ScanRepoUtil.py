@@ -196,6 +196,7 @@ class ScanRepoUtil(object):
 
     def evalScan(self, scanDataFilePath, evalJsonFilePath, evalType="data_type"):
 
+        rD = {}
         scanDataD = self.__mU.doImport(scanDataFilePath, fmt="pickle")
         if evalType in ["data_type"]:
             rD = self.__evalScanDataType(scanDataD)
