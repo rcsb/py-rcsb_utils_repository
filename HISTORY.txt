@@ -37,3 +37,4 @@
 12-Jun-2023 - V0.41 Disable useCache for holdings files to force re-download
 05-Mar-2024 - V0.42 Adjust RepositoryProvider to support BCIF loading and CSM scaling
 19-Mar-2024 - V0.43 Raise exception and return empty list if not all dataContainers are properly read from file in __mergeContainers()
+29-May-2024 - V0.44 Fix pylinting
