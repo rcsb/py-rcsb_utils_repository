@@ -4,6 +4,8 @@
 #
 #  Updates:
 #   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
+#    1-Jul-2024  dwp Stop populating "2fo-fc Map" and "fo-fc Map" content types (DSN6 maps), and
+#                    only include "Map Coefficients" (MTZ map coefficients) in repository holdings
 #
 ##
 """Provide inventory of current repository content.
@@ -171,8 +173,9 @@ class CurrentHoldingsProvider(object):
     def __assembleEntryContentTypes(self, invD):
         # Mapping between repository content types and those used by RCSB.org
         contentTypeD = {
-            "2fofc Map": "2fo-fc Map",
-            "fofc Map": "fo-fc Map",
+            "mtz_map_coefficients": "Map Coefficients",
+            # "2fofc Map": "2fo-fc Map",
+            # "fofc Map": "fo-fc Map",
             "assembly_mmcif": "assembly mmCIF",
             "assembly_pdb": "assembly PDB",
             "combined_nmr_data_nef": "Combined NMR data (NEF)",
@@ -207,8 +210,6 @@ class CurrentHoldingsProvider(object):
             for contentType, pthL in tD.items():
                 if contentType in contentTypeD:
                     ctD.setdefault(entryId, []).append(contentTypeD[contentType])
-                if contentType == "2fofc Map":
-                    ctD.setdefault(entryId, []).append("Map Coefficients")
                 if contentType == "validation_report":
                     # "/pdb/validation_reports/01/201l/201l_full_validation.pdf.gz"
                     # "/pdb/validation_reports/01/201l/201l_multipercentile_validation.png.gz"
@@ -253,10 +254,8 @@ class CurrentHoldingsProvider(object):
         for entryId in invD:
             if entryId.lower() in mapD:
                 tD = mapD[entryId.lower()]
-                for ky, bV in tD.items():
-                    if bV:
-                        invD[entryId][ky + " Map"] = []
-        #
+                if "2fofc" in tD and tD["2fofc"] == "true":
+                    invD[entryId]["mtz_map_coefficients"] = []
         return invD
 
     def __reloadEdmapContent(self, edmapsLocator, dirPath):

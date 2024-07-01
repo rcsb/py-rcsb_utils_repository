@@ -65,13 +65,14 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
             logger.info("current inventory (%d)", len(cD))
             self.assertGreaterEqual(len(cD), listLen)
             #
-            ctL = chP.getEntryContentTypes("1kip")
-            logger.debug("ctL (%d) %r ", len(ctL), ctL)
+            entryId = "1kip"
+            ctL = chP.getEntryContentTypes(entryId)
+            logger.info("ctL (%d) %r ", len(ctL), ctL)
             self.assertGreaterEqual(len(ctL), 8)
             #
             for ct in ctL:
-                fL = chP.getEntryContentTypePathList("1kip", ct)
-                if "Map" not in ct:
+                fL = chP.getEntryContentTypePathList(entryId, ct)
+                if "map" not in ct.lower():
                     self.assertGreaterEqual(len(fL), 1)
             #
             idList = chP.getEntryIdList()
@@ -83,6 +84,8 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
             #
             ctD, assemD = chP.getRcsbContentAndAssemblies()
             logger.info("ctD (%d) assemD (%d)", len(ctD), len(assemD))
+            logger.info("ctD for entryId %s: %r", entryId, ctD[entryId.upper()])
+            logger.info("assemD for entryId %s: %r", entryId, assemD[entryId.upper()])
 
         except Exception as e:
             logger.exception("Failing with %s", str(e))
