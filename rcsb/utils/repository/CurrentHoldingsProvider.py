@@ -174,8 +174,8 @@ class CurrentHoldingsProvider(object):
         # Mapping between repository content types and those used by RCSB.org
         contentTypeD = {
             "mtz_map_coefficients": "Map Coefficients",
-            "2fofc Map": "2fo-fc Map",
-            "fofc Map": "fo-fc Map",
+            # "2fofc Map": "2fo-fc Map",
+            # "fofc Map": "fo-fc Map",
             "assembly_mmcif": "assembly mmCIF",
             "assembly_pdb": "assembly PDB",
             "combined_nmr_data_nef": "Combined NMR data (NEF)",
