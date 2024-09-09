@@ -5,6 +5,7 @@
 #  Updates:
 #   18-Apr-2022  dwp Update getSupersededBy method to recursively return all superseded entries
 #   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
+#    9-Sep-2024  dwp Always defer to loading holdings data from remote (rather than storing it locally)
 ##
 """Provide an inventory of removed repository content.
 """
@@ -24,6 +25,7 @@ class RemovedHoldingsProvider(object):
     def __init__(self, cachePath, useCache=False, **kwargs):
         self.__cachePath = cachePath
         self.__dirPath = os.path.join(self.__cachePath, "holdings")
+        self.__storeCache = kwargs.get("storeCache", False)
         self.__filterType = kwargs.get("filterType", "")
         self.__assignDates = "assign-dates" in self.__filterType
         baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
@@ -137,17 +139,21 @@ class RemovedHoldingsProvider(object):
         fp = os.path.join(dirPath, fn)
         self.__mU.mkdir(dirPath)
         #
-        if useCache and self.__mU.exists(fp):
+        if self.__storeCache and useCache and self.__mU.exists(fp):
             invD = self.__mU.doImport(fp, fmt="json")
             logger.info("Reading cached inventory (%d) from file %s", len(invD), fp)
         else:
+            invD = self.__mU.doImport(urlTarget, fmt="json")
+            logger.info("Loaded inventory from %s (%r)", urlTarget, len(invD))
+            if len(invD) == 0:
+                invD = self.__mU.doImport(urlFallbackTarget, fmt="json")
+                logger.info("Loaded fallback inventory from %s (%r)", urlFallbackTarget, len(invD))
+        #
+        if self.__storeCache:
             logger.info("Fetch inventory from %s", urlTarget)
             ok = fU.get(urlTarget, fp)
             if not ok:
                 ok = fU.get(urlFallbackTarget, fp)
-            #
-            if ok:
-                invD = self.__mU.doImport(fp, fmt="json")
         #
         return invD
 
