@@ -567,7 +567,7 @@ class RepositoryProvider(object):
                     logger.info("idCodeList selected tIdL first few: %r", tIdL[0:5])
             #
             if not (mergeContentTypes and "vrpt" in mergeContentTypes):
-                logger.error("validation mergeContentTypes not enabled!")
+                logger.error("Validation mergeContentTypes not enabled!")
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -578,7 +578,7 @@ class RepositoryProvider(object):
                         kwD = HashableDict({"marshalHelper": toCifWrapper})
                         locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "xml", "kwargs": kwD}))
                     else:
-                        logger.error("Validation data not found for id %r", tId)
+                        logger.warning("Validation data not found for id %r", tId)
                 uL.append(tuple(locObj))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
