@@ -548,15 +548,26 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
+                logger.info("Initializing CurrentHoldingsProvider")
                 self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
+            ok = self.__chP.testCache()
+            logger.info("CurrentHoldingsProvider testCache (%r)", ok)
+            #
             tIdL = self.__chP.getEntryIdList()
+            logger.info("original tIdL length (%r)", len(tIdL))
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 # idCodeList = [t.upper() for t in idCodeList]
                 # tIdL = list(set(tIdL).intersection(idCodeList))
-                logger.debug("idCodeList selected: %r", tIdL)
+                logger.debug("idCodeList selected tIdL: %r", tIdL)
+                logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
+                if len(tIdL) > 10:
+                    logger.info("idCodeList selected tIdL first few: %r", tIdL[0:5])
+            #
+            if not (mergeContentTypes and "vrpt" in mergeContentTypes):
+                logger.error("Validation mergeContentTypes not enabled!")
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -566,6 +577,8 @@ class RepositoryProvider(object):
                     if self.__chP.hasValidationReportData(tId):
                         kwD = HashableDict({"marshalHelper": toCifWrapper})
                         locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "xml", "kwargs": kwD}))
+                    else:
+                        logger.warning("Validation data not found for id %r", tId)
                 uL.append(tuple(locObj))
         except Exception as e:
             logger.exception("Failing with %s", str(e))

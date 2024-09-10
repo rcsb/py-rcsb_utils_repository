@@ -6,6 +6,8 @@
 #   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
 #    1-Jul-2024  dwp Stop populating "2fo-fc Map" and "fo-fc Map" content types (DSN6 maps), and
 #                    only include "Map Coefficients" (MTZ map coefficients) in repository holdings
+#    9-Sep-2024  dwp Always defer to loading holdings data from remote (rather than storing it locally);
+#                    Add validation coefficients to list of repository_content_types
 #
 ##
 """Provide inventory of current repository content.
@@ -30,6 +32,7 @@ class CurrentHoldingsProvider(object):
     def __init__(self, cachePath, useCache=False, **kwargs):
         self.__cachePath = cachePath
         self.__dirPath = os.path.join(cachePath, "holdings")
+        self.__storeCache = kwargs.get("storeCache", False)
         #
         edMapsLocator = kwargs.get("edmapsLocator", "https://raw.githubusercontent.com/rcsb/py-rcsb_exdb_assets/master/fall_back/edmaps.json")
         #
@@ -55,7 +58,7 @@ class CurrentHoldingsProvider(object):
         if not ok:
             self.__eiP = None
 
-    def testCache(self, minCount=170000):
+    def testCache(self, minCount=220000):
         logger.info("Inventory length cD (%d) id list (%d)", len(self.__invD), len(self.__idD))
         # JDW - restore consistency checks
         # if len(self.__invD) > minCount and len(self.__idD) > minCount and len(self.__invD) == len(self.__idD):
@@ -193,6 +196,8 @@ class CurrentHoldingsProvider(object):
             # Missing mappings
             # "validation report",
             # "validation slider image"
+            # "validation 2fo-fc coefficients"
+            # "validation fo-fc coefficients"
             # "Map Coefficients",
             # "FASTA sequence",
         }
@@ -226,6 +231,10 @@ class CurrentHoldingsProvider(object):
                             ctD.setdefault(entryId, []).append("validation slider image")
                         elif "validation.cif.gz" in pth:
                             ctD.setdefault(entryId, []).append("validation data mmCIF")
+                        elif "validation_2fo-fc_map_coef.cif.gz" in pth:
+                            ctD.setdefault(entryId, []).append("validation 2fo-fc coefficients")
+                        elif "validation_fo-fc_map_coef.cif.gz" in pth:
+                            ctD.setdefault(entryId, []).append("validation fo-fc coefficients")
                 if contentType == "assembly_mmcif":
                     # "/pdb/data/biounit/mmCIF/divided/a0/7a09-assembly1.cif.gz"
                     for pth in pthL:
@@ -261,14 +270,16 @@ class CurrentHoldingsProvider(object):
     def __reloadEdmapContent(self, edmapsLocator, dirPath):
         invD = {}
         try:
-            fU = FileUtil()
-            fn = fU.getFileName(edmapsLocator)
-            fp = os.path.join(dirPath, fn)
-            self.__mU.mkdir(dirPath)
-            logger.info("Fetch edmaps inventory from %s", edmapsLocator)
-            ok = fU.get(edmapsLocator, fp)
-            if ok:
-                invD = self.__mU.doImport(fp, fmt="json")
+            invD = self.__mU.doImport(edmapsLocator, fmt="json")
+            logger.info("Loaded edmaps inventory from %s (%r)", edmapsLocator, len(invD))
+            #
+            if self.__storeCache:
+                fU = FileUtil()
+                fn = fU.getFileName(edmapsLocator)
+                fp = os.path.join(dirPath, fn)
+                self.__mU.mkdir(dirPath)
+                ok = fU.get(edmapsLocator, fp)
+                logger.info("Fetch edmaps inventory from %s to %s (%r)", edmapsLocator, fp, ok)
         except Exception as e:
             logger.exception("Failing for %r with %s", edmapsLocator, str(e))
         return invD
@@ -280,43 +291,56 @@ class CurrentHoldingsProvider(object):
         fp = os.path.join(dirPath, fn)
         self.__mU.mkdir(dirPath)
         #
-        if useCache and self.__mU.exists(fp):
+        if self.__storeCache and useCache and self.__mU.exists(fp):
             invD = self.__mU.doImport(fp, fmt="json")
-            logger.debug("Reading cached inventory (%d)", len(invD))
+            logger.info("Reading cached inventory (%d)", len(invD))
         else:
-            logger.info("Fetch inventory from %s", urlTarget)
-            ok = fU.get(urlTarget, fp)
-            if not ok:
-                ok = fU.get(urlFallbackTarget, fp)
-            if ok:
-                invD = self.__mU.doImport(fp, fmt="json")
-                mapD = self.__reloadEdmapContent(edMapsLocator, self.__dirPath)
-                invD = self.__addMapContents(invD, mapD)
-                ofp = fp[:-3] if fp.endswith(".gz") else fp
-                ok = self.__mU.doExport(ofp, invD, fmt="json", indent=3)
-                if fp.endswith(".gz"):
-                    logger.info("Updating the current entry contents (%r) in %r", ok, fp)
-                    fU.compress(ofp, fp)
+            invD = self.__mU.doImport(urlTarget, fmt="json")
+            logger.info("Loaded inventory from %s (%r)", urlTarget, len(invD))
+            if len(invD) == 0:
+                invD = self.__mU.doImport(urlFallbackTarget, fmt="json")
+                logger.info("Loaded fallback inventory from %s (%r)", urlFallbackTarget, len(invD))
+            mapD = self.__reloadEdmapContent(edMapsLocator, self.__dirPath)
+            invD = self.__addMapContents(invD, mapD)
+            del mapD
+            #
+            # previous method - save file locally
+            if self.__storeCache:
+                logger.info("Fetch inventory from %s", urlTarget)
+                ok = fU.get(urlTarget, fp)
+                if not ok:
+                    ok = fU.get(urlFallbackTarget, fp)
+                if ok:
+                    ofp = fp[:-3] if fp.endswith(".gz") else fp
+                    ok = self.__mU.doExport(ofp, invD, fmt="json", indent=3)
+                    if fp.endswith(".gz"):
+                        logger.info("Updating the current entry contents (%r) in %r", ok, fp)
+                        fU.compress(ofp, fp)
         return invD
 
     def __reloadEntryIds(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+        tD = {}
         idD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
         fp = os.path.join(dirPath, fn)
         self.__mU.mkdir(dirPath)
         #
-        if useCache and self.__mU.exists(fp):
+        if self.__storeCache and useCache and self.__mU.exists(fp):
             tD = self.__mU.doImport(fp, fmt="json")
-            logger.debug("Reading cached IDs list (%d)", len(tD))
+            logger.info("Reading cached IDs list (%d)", len(tD))
         else:
+            tD = self.__mU.doImport(urlTarget, fmt="json")
+            logger.info("Loaded ID list from %s (%r)", urlTarget, len(tD))
+            if len(tD) == 0:
+                tD = self.__mU.doImport(urlFallbackTarget, fmt="json")
+                logger.info("Loaded fallback ID list from %s (%r)", urlFallbackTarget, len(tD))
+        #
+        if self.__storeCache:
             logger.info("Fetch ID list from %s", urlTarget)
             ok = fU.get(urlTarget, fp)
             if not ok:
                 ok = fU.get(urlFallbackTarget, fp)
-            #
-            if ok:
-                tD = self.__mU.doImport(fp, fmt="json")
         #
         for k, v in tD.items():
             try:
@@ -328,23 +352,28 @@ class CurrentHoldingsProvider(object):
         return {k: v for k, v in sTupL}
 
     def __reloadRefdataIds(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+        tD = {}
         idD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
         fp = os.path.join(dirPath, fn)
         self.__mU.mkdir(dirPath)
         #
-        if useCache and self.__mU.exists(fp):
+        if self.__storeCache and useCache and self.__mU.exists(fp):
             tD = self.__mU.doImport(fp, fmt="json")
-            logger.debug("Reading cached IDs list (%d)", len(tD))
+            logger.info("Reading cached IDs list (%d)", len(tD))
         else:
+            tD = self.__mU.doImport(urlTarget, fmt="json")
+            logger.info("Loaded ID list from %s (%r)", urlTarget, len(tD))
+            if len(tD) == 0:
+                tD = self.__mU.doImport(urlFallbackTarget, fmt="json")
+                logger.info("Loaded fallback ID list from %s (%r)", urlFallbackTarget, len(tD))
+        #
+        if self.__storeCache:
             logger.info("Fetch ID list from %s", urlTarget)
             ok = fU.get(urlTarget, fp)
             if not ok:
                 ok = fU.get(urlFallbackTarget, fp)
-            #
-            if ok:
-                tD = self.__mU.doImport(fp, fmt="json")
         #
         for k, v in tD.items():
             try:
