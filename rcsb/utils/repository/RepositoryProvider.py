@@ -30,6 +30,9 @@
 #    3-Aug-2022  dwp Enable retrieval of specific computed-model files with input
 #    2-Feb-2023  dwp add support for requesting specific inputIdCodeList/idCodeList for CSMs
 #   12-Jun-2023  dwp disable useCache for holdings files to force fresh re-download
+#    5-Mar-2024  dwp Adjustments to support BCIF loading and CSM scaling (eliminate need to import CSM holdings file)
+#   19-Mar-2024  dwp Raise exception and return empty list if not all dataContainers are properly read from file
+#                    in __mergeContainers() (e.g., if mmCIF file is read in but validation report fails)
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -268,11 +271,17 @@ class RepositoryProvider(object):
         cL = []
         try:
             if isinstance(locatorObj, str):
+                # This is followed for CSMs and anything else that doesn't have an associated validation report file
+                if locatorObj.lower().endswith(".bcif.gz") or locatorObj.lower().endswith(".bcif"):
+                    fmt = "bcif"
+                logger.debug("locatorObj %s fmt %s", locatorObj, fmt)
                 cL = self.__mU.doImport(locatorObj, fmt=fmt)
                 if not cL:
-                    logger.warning("locator %r returns empty container list.", locatorObj)
-                return cL if cL else []
+                    logger.error("locator %r fmt %s returned empty container list.", locatorObj, fmt)
+                    raise ValueError("locator %r fmt %s returned empty container list" % (locatorObj, fmt))
+            #
             elif isinstance(locatorObj, (list, tuple)) and locatorObj:
+                # This is followed for Experimental mmCIF files (anything with have an associated validation report file)
                 dD = locatorObj[0]
                 kw = dD["kwargs"]
                 cL = self.__mU.doImport(dD["locator"], fmt=dD["fmt"], **kw)
@@ -281,19 +290,23 @@ class RepositoryProvider(object):
                         kw = dD["kwargs"]
                         rObj = self.__mU.doImport(dD["locator"], fmt=dD["fmt"], **kw)
                         mergeL = rObj if rObj else []
+                        if not mergeL:
+                            logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
+                            raise ValueError("locator object with leading path %r returned empty container list (%r)" % (dD["locator"], locatorObj))
                         for mc in mergeL:
                             cL[mergeTarget].merge(mc)
                 else:
-                    logger.warning("locator object with leading path %r returns empty container list (%r) ", dD["locator"], locatorObj)
-                #
-                return cL
+                    logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
+                    raise ValueError("locator object with leading path %r returned empty container list (%r)" % (dD["locator"], locatorObj))
+            #
             else:
                 logger.warning("non-conforming locator object %r", locatorObj)
-                return []
+
         except Exception as e:
             logger.exception("Failing for %r with %s", locatorObj, str(e))
-
-        return cL
+            return []
+        #
+        return cL if cL else []
 
     def __getLocatorList(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None):
         if self.__discoveryMode == "local":
@@ -374,7 +387,8 @@ class RepositoryProvider(object):
             elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 outputLocatorList = self.__getIhmDevPathList()
             elif contentType in ["pdbx_comp_model_core"]:
-                outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList)
+                outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList, fmt="mmcif")
+                # outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList, fmt="bcif")
             else:
                 logger.warning("Unsupported contentType %s", contentType)
 
@@ -533,15 +547,26 @@ class RepositoryProvider(object):
         uL = []
         try:
             if not self.__chP:
+                logger.info("Initializing CurrentHoldingsProvider")
                 self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
             #
+            ok = self.__chP.testCache()
+            logger.info("CurrentHoldingsProvider testCache (%r)", ok)
+            #
             tIdL = self.__chP.getEntryIdList()
+            logger.info("original tIdL length (%r)", len(tIdL))
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
                 tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 # idCodeList = [t.upper() for t in idCodeList]
                 # tIdL = list(set(tIdL).intersection(idCodeList))
-                logger.debug("idCodeList selected: %r", tIdL)
+                logger.debug("idCodeList selected tIdL: %r", tIdL)
+                logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
+                if len(tIdL) > 10:
+                    logger.info("idCodeList selected tIdL first few: %r", tIdL[0:5])
+            #
+            if not (mergeContentTypes and "vrpt" in mergeContentTypes):
+                logger.error("Validation mergeContentTypes not enabled!")
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -551,6 +576,8 @@ class RepositoryProvider(object):
                     if self.__chP.hasValidationReportData(tId):
                         kwD = HashableDict({})
                         locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "mmcif", "kwargs": kwD}))
+                    else:
+                        logger.warning("Validation data not found for id %r", tId)
                 uL.append(tuple(locObj))
         except Exception as e:
             logger.exception("Failing with %s", str(e))
@@ -784,9 +811,13 @@ class RepositoryProvider(object):
         _ = procName
         _ = workingDir
         topRepoPath = optionsD["topRepoPath"]
+        modelFormat = optionsD["modelFormat"]
         pathList = []
-        for modelPath in dataList:
-            pathList.append(os.path.join(topRepoPath, modelPath))
+        for modelId in dataList:
+            modelSourcePrefix, firstDir, secondDir = modelId[0:2], modelId[-6:-4], modelId[-4:-2]
+            internalModelName = modelId + modelFormat
+            modelPathFromPrefixDir = os.path.join(modelSourcePrefix, firstDir, secondDir, internalModelName)
+            pathList.append(os.path.join(topRepoPath, modelPathFromPrefixDir))
         return dataList, pathList, []
 
     def __getEntryPathList(self):
@@ -1185,10 +1216,10 @@ class RepositoryProvider(object):
         return outPathList
         #
 
-    def __getCompModelPathList(self, idCodeList=None):
-        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), idCodeList=idCodeList, numProc=self.__numProc)
+    def __getCompModelPathList(self, idCodeList=None, fmt="mmcif"):
+        return self.__fetchModelPathList(self.__getRepoLocalPath("pdbx_comp_model_core"), idCodeList=idCodeList, fmt=fmt, numProc=self.__numProc)
 
-    def __fetchModelPathList(self, topRepoPath, idCodeList=None, numProc=8):
+    def __fetchModelPathList(self, topRepoPath, idCodeList=None, fmt="mmcif", numProc=8):
         """Get the path list for computational models in the input cached model repository
 
         TO-DO: Add check of cache file to see if it changed between the last time data was uploaded, and if so, then upload new models
@@ -1203,80 +1234,19 @@ class RepositoryProvider(object):
         idCodeList = idCodeList if idCodeList else []
         pathList = []
         try:
-            compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
-            if not compModelCacheFile:
-                logger.info("Failed to determine path of computed-models cache file. Returning empty pathList.")
-                return pathList
-            if cacheFmt == "pickle" and compressed:
-                compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
-            compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
-            #
-            dataList = []
-            if len(idCodeList) > 0:
-                for mId in idCodeList:
-                    dataList.append(compModelCacheD[mId]["modelPath"])
-            else:
-                for _, modelD in compModelCacheD.items():
-                    dataList.append(modelD["modelPath"])
-            logger.info("Computed-models loaded dataList length: %d", len(dataList))
-            #
             optD = {}
             optD["topRepoPath"] = topRepoPath
+            optD["modelFormat"] = ".bcif.gz" if "bcif" in fmt.lower() else ".cif.gz"
             mpu = MultiProcUtil(verbose=self.__verbose)
             mpu.setOptions(optionsD=optD)
             mpu.set(workerObj=self, workerMethod="_compModelPathWorker")
-            _, _, retLists, _ = mpu.runMulti(dataList=dataList, numProc=numProc, numResults=1)
+            _, _, retLists, _ = mpu.runMulti(dataList=idCodeList, numProc=numProc, numResults=1)
             pathList = retLists[0]
             endTime0 = time.time()
             logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
         except Exception as e:
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(pathList)
-
-    def __getCompModelCachPath(self):
-        """Convenience method to return path for computed-model cache file (json or pickle),
-        which contains the list of all computed-models in storage area.
-        """
-        pth = None
-        fmt = None
-        compressed = False
-        try:
-            pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_CACHE_LIST_PATH", sectionName=self.__configName)
-            if pth.endswith(".pic") or pth.endswith(".pic.gz"):
-                fmt = "pickle"
-            elif pth.endswith(".json") or pth.endswith(".json.gz"):
-                fmt = "json"
-            else:
-                logger.warning("Unsupported format/extension for computed-model cache file %s", pth)
-            if pth.endswith(".gz"):
-                compressed = True
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        return pth, fmt, compressed
-
-    def getCompModelIdMap(self):
-        return self.__fetchCompModelIdMap()
-
-    def __fetchCompModelIdMap(self):
-        """Get the ID mapping between the source model IDs and internal model identifiers for computational models.
-        """
-        #
-        compModelIdMapD = {}
-        try:
-            compModelCacheFile, cacheFmt, compressed = self.__getCompModelCachPath()
-            if not compModelCacheFile:
-                logger.info("Failed to determine path of computed-models cache file. Returning empty compModelIdMapD.")
-                return compModelIdMapD
-            if cacheFmt == "pickle" and compressed:
-                compModelCacheFile = self.__fU.uncompress(compModelCacheFile)
-            compModelCacheD = self.__mU.doImport(compModelCacheFile, fmt=cacheFmt)
-            for internalModelId, modelD in compModelCacheD.items():
-                compModelIdMapD.update({modelD["sourceId"]: internalModelId})
-            logger.info("Computed-models mapped ID length: %d", len(compModelIdMapD))
-            #
-        except Exception as e:
-            logger.exception("Failing with %s", str(e))
-        return compModelIdMapD
 
     def __getIhmDevPathList(self):
         return self.__fetchIhmDevPathList(self.__getRepoLocalPath("ihm_dev"))
