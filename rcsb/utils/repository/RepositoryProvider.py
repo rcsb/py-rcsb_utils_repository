@@ -33,6 +33,7 @@
 #    5-Mar-2024  dwp Adjustments to support BCIF loading and CSM scaling (eliminate need to import CSM holdings file)
 #   19-Mar-2024  dwp Raise exception and return empty list if not all dataContainers are properly read from file
 #                    in __mergeContainers() (e.g., if mmCIF file is read in but validation report fails)
+#   16-Oct-2024  dwp Remove usage of EDMAPS holdings file
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -92,12 +93,10 @@ class RepositoryProvider(object):
         self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
         self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
         self.__baseUrlPDBDev = self.__cfgOb.getPath("PDBDEV_REPO_URL", sectionName=self.__configName, default="https://pdb-dev.wwpdb.org")
-        self.__edMapUrl = self.__cfgOb.getPath("RCSB_EDMAP_LIST_PATH", sectionName=self.__configName, default=None)
         #
         self.__kwD = {
             "holdingsTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "holdings"),
             "holdingsFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "holdings"),
-            "edmapsLocator": self.__edMapUrl,
             "updateTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "data", "status", "latest"),
             "updateFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "data", "status", "latest"),
             "filterType": "assign-dates",
