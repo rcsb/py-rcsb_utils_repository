@@ -41,5 +41,5 @@
  1-Jul-2024 - V0.45 Update CurrentHoldingsProvider to stop including DSN6 maps
  9-Sep-2024 - V0.46 Always defer to loading holdings data from remote (rather than storing it locally);
                     Add validation coefficients to list of repository_content_types
-16-Sep-2024 - V0.47 Remove dependency on edmaps holdings file (no longer generating Map Coefficient MTZ files);
+22-Oct-2024 - V0.47 Remove dependency on edmaps holdings file (no longer generating Map Coefficient MTZ files);
                     Update CI/CD testing to use python 3.10
