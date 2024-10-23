@@ -8,6 +8,7 @@
 #                    only include "Map Coefficients" (MTZ map coefficients) in repository holdings
 #    9-Sep-2024  dwp Always defer to loading holdings data from remote (rather than storing it locally);
 #                    Add validation coefficients to list of repository_content_types
+#   16-Oct-2024  dwp Remove usage of EDMAPS holdings file
 #
 ##
 """Provide inventory of current repository content.
@@ -34,8 +35,6 @@ class CurrentHoldingsProvider(object):
         self.__dirPath = os.path.join(cachePath, "holdings")
         self.__storeCache = kwargs.get("storeCache", False)
         #
-        edMapsLocator = kwargs.get("edmapsLocator", "https://raw.githubusercontent.com/rcsb/py-rcsb_exdb_assets/master/fall_back/edmaps.json")
-        #
         baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
         fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
         #
@@ -49,7 +48,7 @@ class CurrentHoldingsProvider(object):
         #
         self.__mU = MarshalUtil(workPath=self.__dirPath)
 
-        self.__invD = self.__reloadEntryContent(entryUrlContent, entryUrlFallbackContent, edMapsLocator, self.__dirPath, useCache=useCache)
+        self.__invD = self.__reloadEntryContent(entryUrlContent, entryUrlFallbackContent, self.__dirPath, useCache=useCache)
         self.__idD = self.__reloadEntryIds(entryUrlIds, entryUrlFallbackIds, self.__dirPath, useCache=useCache)
         self.__refD = self.__reloadRefdataIds(refdataUrlIds, refdataUrlFallbackIds, self.__dirPath, useCache=useCache)
         # EntryInfoProvider must be cached before this class is invoked -
@@ -176,9 +175,6 @@ class CurrentHoldingsProvider(object):
     def __assembleEntryContentTypes(self, invD):
         # Mapping between repository content types and those used by RCSB.org
         contentTypeD = {
-            "mtz_map_coefficients": "Map Coefficients",
-            # "2fofc Map": "2fo-fc Map",
-            # "fofc Map": "fo-fc Map",
             "assembly_mmcif": "assembly mmCIF",
             "assembly_pdb": "assembly PDB",
             "combined_nmr_data_nef": "Combined NMR data (NEF)",
@@ -198,7 +194,6 @@ class CurrentHoldingsProvider(object):
             # "validation slider image"
             # "validation 2fo-fc coefficients"
             # "validation fo-fc coefficients"
-            # "Map Coefficients",
             # "FASTA sequence",
         }
         #
@@ -251,40 +246,7 @@ class CurrentHoldingsProvider(object):
             assemD[entryId] = list(assemS)
         return ctD, assemD
 
-    def __addMapContents(self, invD, mapD):
-        """Add map content types to the entry inventory
-
-        Args:
-            invD (dict): entry inventory
-            mapD (dict): map inventory
-
-            Example - edmaps.json {"6aok": {"2fofc": "true", "fofc": "true"}, "4ih7": {"2fofc": "true", "fofc": "true"}, ...}
-        """
-        for entryId in invD:
-            if entryId.lower() in mapD:
-                tD = mapD[entryId.lower()]
-                if "2fofc" in tD and tD["2fofc"] == "true":
-                    invD[entryId]["mtz_map_coefficients"] = []
-        return invD
-
-    def __reloadEdmapContent(self, edmapsLocator, dirPath):
-        invD = {}
-        try:
-            invD = self.__mU.doImport(edmapsLocator, fmt="json")
-            logger.info("Loaded edmaps inventory from %s (%r)", edmapsLocator, len(invD))
-            #
-            if self.__storeCache:
-                fU = FileUtil()
-                fn = fU.getFileName(edmapsLocator)
-                fp = os.path.join(dirPath, fn)
-                self.__mU.mkdir(dirPath)
-                ok = fU.get(edmapsLocator, fp)
-                logger.info("Fetch edmaps inventory from %s to %s (%r)", edmapsLocator, fp, ok)
-        except Exception as e:
-            logger.exception("Failing for %r with %s", edmapsLocator, str(e))
-        return invD
-
-    def __reloadEntryContent(self, urlTarget, urlFallbackTarget, edMapsLocator, dirPath, useCache=True):
+    def __reloadEntryContent(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
         invD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
@@ -300,9 +262,6 @@ class CurrentHoldingsProvider(object):
             if len(invD) == 0:
                 invD = self.__mU.doImport(urlFallbackTarget, fmt="json")
                 logger.info("Loaded fallback inventory from %s (%r)", urlFallbackTarget, len(invD))
-            mapD = self.__reloadEdmapContent(edMapsLocator, self.__dirPath)
-            invD = self.__addMapContents(invD, mapD)
-            del mapD
             #
             # previous method - save file locally
             if self.__storeCache:
