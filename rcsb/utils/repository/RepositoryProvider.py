@@ -565,7 +565,7 @@ class RepositoryProvider(object):
                     logger.info("idCodeList selected tIdL first few: %r", tIdL[0:5])
             #
             if not (mergeContentTypes and "vrpt" in mergeContentTypes):
-                logger.error("Validation mergeContentTypes not enabled!")
+                logger.warning("Validation mergeContentTypes not enabled!")
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -573,7 +573,6 @@ class RepositoryProvider(object):
                 if mergeContentTypes and "vrpt" in mergeContentTypes:
                     # if self.__chP.hasEntryContentType(tId, "validation_report"):
                     if self.__chP.hasValidationReportData(tId):
-                        #kwD = HashableDict({})
                         locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "mmcif", "kwargs": kwD}))
                     else:
                         logger.warning("Validation data not found for id %r", tId)
@@ -741,7 +740,6 @@ class RepositoryProvider(object):
                             idCode = fn[:4] if fn and len(fn) >= 8 else None
                             mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
                             if mergeLocator:
-                                #kwD = HashableDict({})
                                 oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                         lObj = tuple(oL)
                         locatorObjList.append(lObj)
