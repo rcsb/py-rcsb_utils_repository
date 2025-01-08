@@ -71,7 +71,7 @@ class RepositoryProvider(object):
 
     Discovery modes:
 
-    Local file system mode - data sets are discovered by scanning repository files systems for files matching the require patterns,
+    Local file system mode - data sets are discovered by scanning repository files systems for files matching the required patterns,
                      and repository paths are defined in configuration data. File system path information may be provided
                      explicitly to avoid file system scans. Some merging and consolidation features are provided for validation data
                      and chemical reference data.
@@ -132,9 +132,9 @@ class RepositoryProvider(object):
             locator object ({"locator": <path or URI> "fmt": <supported format code>, 'kwargs': {}},{}, ... )
 
              supported extensions are:
-                 kwargs : {"marshalHelper": <fuction applied post read (e.g. toCifWrapper)>}
+                 kwargs : {"marshalHelper": <function applied post read (e.g. toCifWrapper)>}
 
-             multiple artifacts within the a locator may be optionally merged/consolidated into a single data object.
+             multiple artifacts within a locator may be optionally merged/consolidated into a single data object.
 
         """
         inputPathList = inputPathList if inputPathList else []
@@ -243,9 +243,8 @@ class RepositoryProvider(object):
                         idCode = fn[:4] if fn and len(fn) >= 8 else None
                         mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
                         if mergeLocator:
-                            # kwD = HashableDict({"marshalHelper": vrd.toCif})
-                            kwD = HashableDict({"marshalHelper": toCifWrapper})
-                            oL.append(HashableDict({"locator": mergeLocator, "fmt": "xml", "kwargs": kwD}))
+                            #kwD = HashableDict({})
+                            oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                     lObj = tuple(oL)
                 else:
                     logger.error("Unexpected output locator type %r", locator)
@@ -300,8 +299,8 @@ class RepositoryProvider(object):
                     raise ValueError("locator object with leading path %r returned empty container list (%r)" % (dD["locator"], locatorObj))
             #
             else:
-                logger.warning("non-comforming locator object %r", locatorObj)
-        #
+                logger.warning("non-conforming locator object %r", locatorObj)
+
         except Exception as e:
             logger.exception("Failing for %r with %s", locatorObj, str(e))
             return []
@@ -430,7 +429,7 @@ class RepositoryProvider(object):
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             elif contentType in ["vrpt"]:
-                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel, idCodel + "_validation.cif.gz")
             else:
                 logger.warning("Unsupported local contentType %s", contentType)
         except Exception as e:
@@ -461,8 +460,8 @@ class RepositoryProvider(object):
                 uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "divided", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["vrpt", "validation_report"]:
                 # /pdb/validation_reports/
-                # https://files.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.xml.gz
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.xml.gz")
+                # https://files.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.cif.gz
+                uri = os.path.join(self.__baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.cif.gz")
                 # logger.info("uri %r", uri)
             #
             elif contentType in ["pdbx_obsolete"]:
@@ -566,7 +565,7 @@ class RepositoryProvider(object):
                     logger.info("idCodeList selected tIdL first few: %r", tIdL[0:5])
             #
             if not (mergeContentTypes and "vrpt" in mergeContentTypes):
-                logger.error("Validation mergeContentTypes not enabled!")
+                logger.warning("Validation mergeContentTypes not enabled!")
             #
             for tId in tIdL:
                 kwD = HashableDict({})
@@ -574,8 +573,7 @@ class RepositoryProvider(object):
                 if mergeContentTypes and "vrpt" in mergeContentTypes:
                     # if self.__chP.hasEntryContentType(tId, "validation_report"):
                     if self.__chP.hasValidationReportData(tId):
-                        kwD = HashableDict({"marshalHelper": toCifWrapper})
-                        locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "xml", "kwargs": kwD}))
+                        locObj.append(HashableDict({"locator": self.__getLocatorRemote("validation_report", tId), "fmt": "mmcif", "kwargs": kwD}))
                     else:
                         logger.warning("Validation data not found for id %r", tId)
                 uL.append(tuple(locObj))
@@ -742,8 +740,7 @@ class RepositoryProvider(object):
                             idCode = fn[:4] if fn and len(fn) >= 8 else None
                             mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
                             if mergeLocator:
-                                kwD = HashableDict({"marshalHelper": toCifWrapper})
-                                oL.append(HashableDict({"locator": mergeLocator, "fmt": "xml", "kwargs": kwD}))
+                                oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                         lObj = tuple(oL)
                         locatorObjList.append(lObj)
         return dataList, locatorObjList, []

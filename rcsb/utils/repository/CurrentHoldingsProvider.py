@@ -168,7 +168,7 @@ class CurrentHoldingsProvider(object):
             tD = invD[entryId.upper()]
             if "validation_report" in tD:
                 for pth in tD["validation_report"]:
-                    if pth[-7:] == ".xml.gz":
+                    if pth[-7:] == ".cif.gz":
                         return True
         return False
 

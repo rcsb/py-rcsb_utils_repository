@@ -58,8 +58,8 @@ class UnreleasedHoldingsProviderTests(unittest.TestCase):
                     kS.add(ky)
             logger.info("unique keys %r", list(kS))
             #
-            sc = rmP.getStatusCode("7oj4")
-            self.assertEqual(sc, "HPUB")
+            sc = rmP.getStatusCode("2a0e")
+            self.assertEqual(sc, "WDRN")
             #
             retD, _ = rmP.getRcsbUnreleasedData()
             self.assertGreaterEqual(len(retD), 1000)
