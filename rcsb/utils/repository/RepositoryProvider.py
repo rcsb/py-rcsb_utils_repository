@@ -34,6 +34,7 @@
 #   19-Mar-2024  dwp Raise exception and return empty list if not all dataContainers are properly read from file
 #                    in __mergeContainers() (e.g., if mmCIF file is read in but validation report fails)
 #   16-Oct-2024  dwp Remove usage of EDMAPS holdings file
+#   28-Jan-2025  dwp Add support for IHM model file loading
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -92,7 +93,6 @@ class RepositoryProvider(object):
         self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
         self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
         self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
-        self.__baseUrlPDBDev = self.__cfgOb.getPath("PDBDEV_REPO_URL", sectionName=self.__configName, default="https://pdb-dev.wwpdb.org")
         #
         self.__kwD = {
             "holdingsTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "holdings"),
@@ -243,7 +243,6 @@ class RepositoryProvider(object):
                         idCode = fn[:4] if fn and len(fn) >= 8 else None
                         mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
                         if mergeLocator:
-                            #kwD = HashableDict({})
                             oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                     lObj = tuple(oL)
                 else:
@@ -338,8 +337,8 @@ class RepositoryProvider(object):
                 outputLocatorList = inputPathList if inputPathList else self.getObsoleteEntryPathList()
             elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
                 outputLocatorList = inputPathList if inputPathList else self.mergeBirdAndChemCompRefData()
-            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                outputLocatorList = inputPathList if inputPathList else self.__getIhmDevPathList()
+            elif contentType in ["ihm", "pdbx_ihm", "pdbx_ihm_core", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                outputLocatorList = inputPathList if inputPathList else self.__getIhmUriList(contentType=contentType)
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 outputLocatorList = inputPathList if inputPathList else []
             elif contentType in ["pdbx_comp_model_core"]:
@@ -383,8 +382,9 @@ class RepositoryProvider(object):
             elif contentType in ["pdbx_obsolete"]:
                 outputLocatorList = self.__getObsoleteEntryUriList(idCodeList=idCodeList)
             #
-            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                outputLocatorList = self.__getIhmDevPathList()
+            elif contentType in ["ihm", "pdbx_ihm", "pdbx_ihm_core", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                outputLocatorList = self.__getIhmUriList(contentType=contentType, idCodeList=idCodeList)
+
             elif contentType in ["pdbx_comp_model_core"]:
                 outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList, fmt="mmcif")
                 # outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList, fmt="bcif")
@@ -424,8 +424,8 @@ class RepositoryProvider(object):
                 pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
-            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                pth = os.path.join(self.__getRepoLocalPath(contentType), idCode, idCode + "_model_%s.cif.gz" % version)
+            elif contentType in ["ihm", "pdbx_ihm", "pdbx_ihm_core", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                pth = os.path.join(self.__fallbackUrlPDB, "pdb_ihm", "data", "entries", idCodel[1:3], idCodel, "structures", idCodel + ".cif.gz")
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             elif contentType in ["vrpt"]:
@@ -470,10 +470,9 @@ class RepositoryProvider(object):
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 uri = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
             #
-            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-
-                # https://pdb-dev.wwpdb.org/cif/PDBDEV_00000001.cif
-                uri = os.path.join(self.__baseUrlPDBDev, "cif", idCode + ".cif")
+            elif contentType in ["ihm", "pdbx_ihm", "pdbx_ihm_core", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                # File path template is:  <topRepoPath>/data/entries/<2-char-hash>/<4-char-id>/structures/<4-char-id>.cif.gz
+                uri = os.path.join(self.__baseUrlPDB, "pdb_ihm", "data", "entries", idCodel[1:3], idCodel, "structures", idCodel + ".cif.gz")
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             else:
@@ -490,7 +489,7 @@ class RepositoryProvider(object):
             bn = os.path.basename(pth)
             if contentType in ["pdbx", "pdbx_core", "pdbx_obsolete", "bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
                 idCode = bn.split(".")[0]
-            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+            elif contentType in ["ihm", "pdbx_ihm", "pdbx_ihm_core", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 tC = bn.split(".")[0]
                 idCode = "_".join(tC.split("_")[:2])
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
@@ -525,8 +524,6 @@ class RepositoryProvider(object):
                 pth = self.__cfgOb.getPath("PDBX_COMP_MODEL_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = self.__cachePath
-            elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                pth = self.__cfgOb.getPath("IHM_DEV_REPO_PATH", sectionName=self.__configName)
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             elif contentType in ["vrpt"]:
@@ -1245,31 +1242,62 @@ class RepositoryProvider(object):
             logger.exception("Failing with %s", str(e))
         return self.__applyLimit(pathList)
 
-    def __getIhmDevPathList(self):
-        return self.__fetchIhmDevPathList(self.__getRepoLocalPath("ihm_dev"))
+    def __getIhmUriList(self, contentType="pdbx_ihm", idCodeList=None):
+        """Get the URI list for IHM models in the remote IHM repository
 
-    def __fetchIhmDevPathList(self, topRepoPath):
-        """Return the list of I/HM entries in the current repository.
+        File path template is:  <topRepoPath>/data/entries/<2-char-hash>/<4-char-id>/structures/<4-char-id>.cif.gz
 
-        File name template is: PDBDEV_0000 0020_model_v1-0.cif.gz
-
-        List is ordered in increasing PRDDEV numerical code.
+        Example full public path: https://files.wwpdb.org/pub/pdb_ihm/data/entries/zz/8zz1/structures/8zz1.cif.gz
+        Example pre-release path: http://<pre...org>/pdb_ihm/data/entries/zz/8zz1/structures/8zz1.cif.gz
         """
-        pathList = []
-        logger.debug("Searching path %r", topRepoPath)
+        uL = []
         try:
-            sd = {}
-            for root, _, files in os.walk(topRepoPath, topdown=False):
-                if "REMOVE" in root:
-                    continue
-                for name in files:
-                    if name.startswith("PDBDEV_") and name.endswith(".cif.gz") and len(name) <= 50:
-                        pth = os.path.join(root, name)
-                        sd[int(name[7:15])] = pth
+            ihmChP = CurrentHoldingsProvider(self.__topCachePath, repoType="pdb_ihm", **self.__kwD)
+            ok = ihmChP.testCache()
+            logger.info("IHM CurrentHoldingsProvider testCache (%r)", ok)
+            ihmChPL = ihmChP.getEntryIdList()
+            logger.info("IHM current holdings list length (%r)", len(ihmChPL))
+            ihmChPD = dict.fromkeys(ihmChPL, True)
             #
-            for k in sorted(sd.keys()):
-                pathList.append(sd[k])
+            tIdL = []
+            if idCodeList:
+                tIdL = [t.lower() for t in idCodeList if t.upper() in ihmChPD]
+                logger.debug("idCodeList selected tIdL: %r", tIdL)
+                logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
+                if len(tIdL) > 10:
+                    logger.info("idCodeList selected tIdL first few: %r", tIdL[0:5])
+            if not idCodeList:
+                # Load all IHM
+                tIdL = [t.lower() for t in ihmChPD]
+                logger.info("loading all IHM IDs in holdings with tIdL length (%r)", len(tIdL))
+            #
+            for tId in tIdL:
+                locObj = self.__getLocatorRemote(contentType, tId)
+                uL.append(locObj)
         except Exception as e:
-            logger.exception("Failing search in %r with %s", topRepoPath, str(e))
-        #
-        return self.__applyLimit(pathList)
+            logger.exception("Failing with %s", str(e))
+        return self.__applyLimit(uL)
+
+    # # DELETE BELOW? Ever used, if we never do local loads?
+    # def __getIhmPathList(self, idCodeList=None, fmt="mmcif"):
+    #     return self.__fetchIhmPathList(self.__getRepoLocalPath("ihm"), idCodeList=idCodeList, fmt=fmt)
+
+    # def __fetchIhmPathList(self, topRepoPath, idCodeList=None, fmt="mmcif"):
+    #     ts = time.strftime("%Y %m %d %H:%M:%S", time.localtime())
+    #     logger.info("Starting at %s", ts)
+    #     logger.info("IHM topRepoPath: %s", topRepoPath)
+    #     startTime = time.time()
+    #     #
+    #     idCodeList = idCodeList if idCodeList else []
+    #     pathList = []
+    #     try:
+    #         modelFormat = ".bcif.gz" if "bcif" in fmt.lower() else ".cif.gz"
+    #         for modelId in idCodeList:
+    #             mIdLower = modelId.lower()
+    #             mPath = os.path.join(self.__baseUrlPDB, "pdb_ihm", "data", "entries", mIdLower[1:3], mIdLower, "structures", mIdLower + modelFormat)
+    #             pathList.append(mPath)
+    #         endTime0 = time.time()
+    #         logger.debug("Path list length %d  in %.4f seconds", len(pathList), endTime0 - startTime)
+    #     except Exception as e:
+    #         logger.exception("Failing with %s", str(e))
+    #     return self.__applyLimit(pathList)

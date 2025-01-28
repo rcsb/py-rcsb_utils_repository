@@ -44,3 +44,4 @@
 22-Oct-2024 - V0.47 Remove dependency on edmaps holdings file (no longer generating Map Coefficient MTZ files);
                     Update CI/CD testing to use python 3.10
  7-Jan-2025 - V0.48 Handle validation data loading from mmCIF file
+28-Jan-2025 - V0.49 Add support for IHM model file loading and current holdings provider

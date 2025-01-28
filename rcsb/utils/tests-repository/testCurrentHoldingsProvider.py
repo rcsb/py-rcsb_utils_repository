@@ -90,10 +90,50 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
 
+    def testIhmCurrent(self):
+        """Test case - get current holdings"""
+        try:
+            listLen = 100
+            useCache = False
+            chP = CurrentHoldingsProvider(self.__cachePath, useCache, repoType="pdb_ihm", storeCache=True)
+            ok = chP.testCache()
+            ctL = chP.getAllContentTypes()
+            logger.info("contentTypes %r", ctL)
+            self.assertTrue(ok)
+            cD = chP.getEntryInventory()
+            logger.info("current inventory (%d)", len(cD))
+            self.assertGreaterEqual(len(cD), listLen)
+            #
+            entryId = "8zz1"
+            ctL = chP.getEntryContentTypes(entryId)
+            logger.info("ctL (%d) %r ", len(ctL), ctL)
+            self.assertGreaterEqual(len(ctL), 2)
+            #
+            for ct in ctL:
+                fL = chP.getEntryContentTypePathList(entryId, ct)
+                if "map" not in ct.lower():
+                    self.assertGreaterEqual(len(fL), 1)
+            #
+            idList = chP.getEntryIdList()
+            self.assertGreaterEqual(len(idList), listLen)
+
+            idList = chP.getEntryIdList(afterDateTimeStamp="2020-01-01")
+            logger.info("Ids after 2020 (%d)", len(idList))
+            self.assertGreaterEqual(len(idList), 100)
+            #
+            ctD, assemD = chP.getRcsbContentAndAssemblies()
+            logger.info("ctD (%d) assemD (%d)", len(ctD), len(assemD))
+            logger.info("ctD for entryId %s: %r", entryId, ctD[entryId.upper()])
+            logger.info("assemD for entryId %s: %r", entryId, assemD[entryId.upper()])
+
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+
 
 def holdingsSuite():
     suiteSelect = unittest.TestSuite()
     suiteSelect.addTest(CurrentHoldingsProviderTests("testEntryCurrent"))
+    suiteSelect.addTest(CurrentHoldingsProviderTests("testIhmCurrent"))
     return suiteSelect
 
 

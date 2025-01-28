@@ -9,6 +9,7 @@
 #    9-Sep-2024  dwp Always defer to loading holdings data from remote (rather than storing it locally);
 #                    Add validation coefficients to list of repository_content_types
 #   16-Oct-2024  dwp Remove usage of EDMAPS holdings file
+#   28-Jan-2025  dwp Add support for IHM holdings file loading
 #
 ##
 """Provide inventory of current repository content.
@@ -34,23 +35,31 @@ class CurrentHoldingsProvider(object):
         self.__cachePath = cachePath
         self.__dirPath = os.path.join(cachePath, "holdings")
         self.__storeCache = kwargs.get("storeCache", False)
+        self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         #
         baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
         fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
+        #
+        if self.__repoType == "pdb_ihm":
+            baseUrl = baseUrl.replace("pdb/holdings", "pdb_ihm/holdings")
+            fallbackUrl = fallbackUrl.replace("pdb/holdings", "pdb_ihm/holdings")
         #
         entryUrlContent = os.path.join(baseUrl, "current_file_holdings.json.gz")
         entryUrlFallbackContent = os.path.join(fallbackUrl, "current_file_holdings.json.gz")
         entryUrlIds = os.path.join(baseUrl, "released_structures_last_modified_dates.json.gz")
         entryUrlFallbackIds = os.path.join(fallbackUrl, "released_structures_last_modified_dates.json.gz")
         #
-        refdataUrlIds = os.path.join(baseUrl, "refdata_id_list.json.gz")
-        refdataUrlFallbackIds = os.path.join(fallbackUrl, "refdata_id_list.json.gz")
-        #
         self.__mU = MarshalUtil(workPath=self.__dirPath)
-
+        #
         self.__invD = self.__reloadEntryContent(entryUrlContent, entryUrlFallbackContent, self.__dirPath, useCache=useCache)
         self.__idD = self.__reloadEntryIds(entryUrlIds, entryUrlFallbackIds, self.__dirPath, useCache=useCache)
-        self.__refD = self.__reloadRefdataIds(refdataUrlIds, refdataUrlFallbackIds, self.__dirPath, useCache=useCache)
+        self.__refD = {}
+        #
+        if self.__repoType != "pdb_ihm":
+            refdataUrlIds = os.path.join(baseUrl, "refdata_id_list.json.gz")
+            refdataUrlFallbackIds = os.path.join(fallbackUrl, "refdata_id_list.json.gz")
+            self.__refD = self.__reloadRefdataIds(refdataUrlIds, refdataUrlFallbackIds, self.__dirPath, useCache=useCache)
+        #
         # EntryInfoProvider must be cached before this class is invoked -
         self.__eiP = EntryInfoProvider(cachePath=self.__cachePath, useCache=True)
         ok = self.__eiP.testCache()
@@ -58,6 +67,8 @@ class CurrentHoldingsProvider(object):
             self.__eiP = None
 
     def testCache(self, minCount=220000):
+        if self.__repoType == "pdb_ihm":
+            minCount = 300
         logger.info("Inventory length cD (%d) id list (%d)", len(self.__invD), len(self.__idD))
         # JDW - restore consistency checks
         # if len(self.__invD) > minCount and len(self.__idD) > minCount and len(self.__invD) == len(self.__idD):
@@ -250,6 +261,8 @@ class CurrentHoldingsProvider(object):
         invD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
+        if self.__repoType == "pdb_ihm":
+            fn = fn.replace(".json", "_ihm.json")  # must do this to prevent overlapping filenames with PDB
         fp = os.path.join(dirPath, fn)
         self.__mU.mkdir(dirPath)
         #
@@ -282,6 +295,8 @@ class CurrentHoldingsProvider(object):
         idD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
+        if self.__repoType == "pdb_ihm":
+            fn = fn.replace(".json", "_ihm.json")  # must do this to prevent overlapping filenames with PDB
         fp = os.path.join(dirPath, fn)
         self.__mU.mkdir(dirPath)
         #
