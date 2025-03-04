@@ -34,7 +34,8 @@
 #   19-Mar-2024  dwp Raise exception and return empty list if not all dataContainers are properly read from file
 #                    in __mergeContainers() (e.g., if mmCIF file is read in but validation report fails)
 #   16-Oct-2024  dwp Remove usage of EDMAPS holdings file
-#   28-Jan-2025  dwp Add support for IHM model file loading; remove all local-based file discovery (only using 'remote' now)
+#    4-Mar-2025  dwp Add support for IHM model file loading;
+#                    Remove support for discoveryMode="local", which performed file tree-based discovery (using only "remote" now)
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -90,7 +91,7 @@ class RepositoryProvider(object):
         self.__cfgOb = cfgOb
         self.__configName = self.__cfgOb.getDefaultSectionName()
         #
-        self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
+        self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="remote")
         self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
         self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
         #
@@ -139,13 +140,18 @@ class RepositoryProvider(object):
              multiple artifacts within a locator may be optionally merged/consolidated into a single data object.
 
         """
-        inputPathList = inputPathList if inputPathList else []
+        locatorList = []
+
+        inputPathList = inputPathList if inputPathList else []  # List of local or remote URL paths to files; this takes precedence over inputIdCodeList
         inputIdCodeList = inputIdCodeList if inputIdCodeList else []
+        excludeIds = excludeIds if excludeIds else []
+        excludeIdsSet = set(excludeIds)
+
         if inputPathList:
-            return self.__getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
-        #
-        locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
-        #
+            locatorList = self.__getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
+        else:
+            locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
+
         if excludeIds:
             fL = []
             for locator in locatorList:
@@ -155,7 +161,7 @@ class RepositoryProvider(object):
                     pth = locator[0]["locator"]
                 #
                 idCode = self.__getIdcodeFromLocatorPath(contentType, pth)
-                if idCode in excludeIds:
+                if idCode in excludeIdsSet:
                     continue
                 fL.append(locator)
             locatorList = fL
@@ -243,7 +249,7 @@ class RepositoryProvider(object):
                     for mergeContentType in mergeContentTypes:
                         _, fn = os.path.split(locator)
                         idCode = fn[:4] if fn and len(fn) >= 8 else None
-                        mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
+                        mergeLocator = self.__getLocator(mergeContentType, idCode) if idCode else None
                         if mergeLocator:
                             oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                     lObj = tuple(oL)
@@ -309,43 +315,44 @@ class RepositoryProvider(object):
         return cL if cL else []
 
     def __getLocatorList(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None):
-        return self.__getLocatorListRemote(contentType, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
+        return self.__getLocatorListRemote(contentType, inputPathList=inputPathList, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
 
-    def __getLocatorListRemote(self, contentType, inputIdCodeList=None, mergeContentTypes=None):
+    def __getLocatorListRemote(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None):
         outputLocatorList = []
+        inputPathList = inputPathList if inputPathList else []  # List of local or remote URL paths to files; this takes precedence over inputIdCodeList
         idCodeList = inputIdCodeList if inputIdCodeList else []
         logger.info("Getting remote locator list for contentType %s with idCodeList length (%d)", contentType, len(idCodeList))
         try:
             if contentType in ["bird", "bird_core"]:
-                outputLocatorList = self.__getBirdUriList(idCodeList=idCodeList)
+                outputLocatorList = inputPathList if inputPathList else self.__getBirdUriList(idCodeList=idCodeList)
             elif contentType == "bird_family":
-                outputLocatorList = self.__getBirdFamilyUriList(idCodeList=idCodeList)
+                outputLocatorList = inputPathList if inputPathList else self.__getBirdFamilyUriList(idCodeList=idCodeList)
             elif contentType in ["chem_comp"]:
-                outputLocatorList = self.__getChemCompUriList(idCodeList=idCodeList)
+                outputLocatorList = inputPathList if inputPathList else self.__getChemCompUriList(idCodeList=idCodeList)
             elif contentType in ["bird_chem_comp"]:
-                outputLocatorList = self.__getBirdChemCompUriList(idCodeList=idCodeList)
+                outputLocatorList = inputPathList if inputPathList else self.__getBirdChemCompUriList(idCodeList=idCodeList)
             elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"] and not self.__fileLimit:
-                outputLocatorList = self.mergeBirdAndChemCompRefData()
+                outputLocatorList = inputPathList if inputPathList else self.mergeBirdAndChemCompRefData()
             elif contentType in ["chem_comp_core", "bird_consolidated", "bird_chem_comp_core"] and self.__fileLimit:
-                outputLocatorList = self.mergeBirdAndChemCompRefDataWithInput(idCodeList=idCodeList)
+                outputLocatorList = inputPathList if inputPathList else self.mergeBirdAndChemCompRefDataWithInput(idCodeList=idCodeList)
             #
             elif contentType in ["pdbx", "pdbx_core"]:
                 if mergeContentTypes and "vrpt" in mergeContentTypes:
                     dictPath = os.path.join(self.__topCachePath, self.__cfgOb.get("DICTIONARY_CACHE_DIR", sectionName=self.__cfgOb.getDefaultSectionName()))
                     os.environ["_RP_DICT_PATH_"] = dictPath
-                    outputLocatorList = self.__getEntryUriList(idCodeList=idCodeList, mergeContentTypes=mergeContentTypes)
+                    outputLocatorList = inputPathList if inputPathList else self.__getEntryUriList(idCodeList=idCodeList, mergeContentTypes=mergeContentTypes)
                 else:
-                    outputLocatorList = self.__getEntryUriList(idCodeList=idCodeList)
+                    outputLocatorList = inputPathList if inputPathList else self.__getEntryUriList(idCodeList=idCodeList)
             #
             elif contentType in ["pdbx_obsolete"]:
-                outputLocatorList = self.__getObsoleteEntryUriList(idCodeList=idCodeList)
+                outputLocatorList = inputPathList if inputPathList else self.__getObsoleteEntryUriList(idCodeList=idCodeList)
             #
-            elif contentType in ["ihm", "pdbx_ihm", "pdbx_ihm_core", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                outputLocatorList = self.__getIhmUriList(contentType=contentType, idCodeList=idCodeList)
+            elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
+                outputLocatorList = inputPathList if inputPathList else self.__getIhmUriList(contentType=contentType, idCodeList=idCodeList)
 
             elif contentType in ["pdbx_comp_model_core"]:
-                outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList, fmt="mmcif")
-                # outputLocatorList = self.__getCompModelPathList(idCodeList=idCodeList, fmt="bcif")
+                outputLocatorList = inputPathList if inputPathList else self.__getCompModelPathList(idCodeList=idCodeList, fmt="mmcif")
+                # outputLocatorList = inputPathList if inputPathList else self.__getCompModelPathList(idCodeList=idCodeList, fmt="bcif")
             else:
                 logger.warning("Unsupported contentType %s", contentType)
 
@@ -359,7 +366,7 @@ class RepositoryProvider(object):
 
         return sorted(outputLocatorList) if outputLocatorList and isinstance(outputLocatorList[0], str) else outputLocatorList
 
-    def __getLocator(self, contentType, idCode, version="v1-0", checkExists=False):
+    def __getLocator(self, contentType, idCode):
         return self.__getLocatorRemote(contentType, idCode)
 
     def __getLocatorRemote(self, contentType, idCode, repositoryLayout="pdbftp"):
