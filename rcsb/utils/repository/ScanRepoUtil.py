@@ -13,6 +13,7 @@
 # 18-Jun-2018 jdw move mocking to configuration level
 # 28-Jun-2018 jdw remove IoUtil() and add working path constructor argument
 # 14-Feb-2020 jdw migrate to rcsb.utils.repository
+#  3-Mar-2025 dwp update method accessing 'pdbx_audit_revision_history' to be specific for content type 'Structure model'
 ##
 """
 Tools for for scanning repositories and collecting coverage and type data information.
@@ -346,7 +347,14 @@ class ScanRepoUtil(object):
         if container.exists("pdbx_audit_revision_history"):
             tObj = container.getObj("pdbx_audit_revision_history")
             # Assuming the default sorting order from the release module -
-            releaseDate = tObj.getValue("revision_date", 0)
+            # First attempt to get list of revision dates only for content type "Structure model"
+            if tObj.hasAttribute("data_content_type"):
+                revDateL = tObj.selectValueListWhere(["revision_date"], "Structure model", "data_content_type")
+                if len(revDateL) > 0 and len(revDateL[0]) > 0:
+                    releaseDate = revDateL[0][0]
+            # Else fallback to the first row
+            if not releaseDate:
+                releaseDate = tObj.getValue("revision_date", 0)
         #
         if container.exists("chem_comp"):
             cObj = container.getObj("chem_comp")
