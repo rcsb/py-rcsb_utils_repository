@@ -4,6 +4,9 @@
 #
 #  Updates:
 #   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
+#   18-Feb-2025  dwp Add blank support for IHM holdings file loading (return nothing, since
+#                    no corresponding update holdings files exist for IHM, nor are there
+#                    plans to provide them)
 #
 ##
 """Provide inventory of current repository update.
@@ -23,15 +26,22 @@ class UpdateHoldingsProvider(object):
 
     def __init__(self, cachePath, useCache=False, **kwargs):
         self.__dirPath = os.path.join(cachePath, "holdings")
-        #
-        baseUrl = kwargs.get("updateTargetUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
-        fallbackUrl = kwargs.get("updateFallbackUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
-        #
+        self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         self.__mU = MarshalUtil(workPath=self.__dirPath)
-        self.__updD = self.__reloadUpdateLists(baseUrl, fallbackUrl, self.__dirPath, useCache=useCache)
+        #
+        # Corresponding updates holdings files do not exist for IHM (nor are there plans to provide them)
+        if self.__repoType == "pdb_ihm":
+            self.__updD = {}
+        #
+        else:
+            baseUrl = kwargs.get("updateTargetUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
+            fallbackUrl = kwargs.get("updateFallbackUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
+            self.__updD = self.__reloadUpdateLists(baseUrl, fallbackUrl, self.__dirPath, useCache=useCache)
 
     def testCache(self, minCount=100):
         logger.info("Length update updD (%d)", len(self.__updD) if self.__updD else 0)
+        if self.__repoType == "pdb_ihm":
+            return True
         if self.__updD and len(self.__updD) > minCount:
             return True
         return False

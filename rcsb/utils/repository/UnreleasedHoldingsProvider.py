@@ -5,6 +5,7 @@
 #  Updates:
 #   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
 #    9-Sep-2024  dwp Always defer to loading holdings data from remote (rather than storing it locally)
+#   28-Jan-2025  dwp Add support for IHM holdings file loading
 #
 ##
 """Provide an inventory of unreleased repository content.
@@ -28,8 +29,14 @@ class UnreleasedHoldingsProvider(object):
         self.__storeCache = kwargs.get("storeCache", False)
         self.__filterType = kwargs.get("filterType", "")
         self.__assignDates = "assign-dates" in self.__filterType
+        self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
+        #
         baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
         fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
+        #
+        if self.__repoType == "pdb_ihm":
+            baseUrl = baseUrl.replace("pdb/holdings", "pdb_ihm/holdings")
+            fallbackUrl = fallbackUrl.replace("pdb/holdings", "pdb_ihm/holdings")
         #
         urlTarget = os.path.join(baseUrl, "unreleased_entries.json.gz")
         urlFallbackTarget = os.path.join(fallbackUrl, "unreleased_entries.json.gz")
@@ -39,6 +46,8 @@ class UnreleasedHoldingsProvider(object):
 
     def testCache(self, minCount=5000):
         logger.info("Inventory length cD (%d)", len(self.__invD))
+        if self.__repoType == "pdb_ihm":
+            return True
         if len(self.__invD) > minCount:
             return True
         return False
@@ -71,6 +80,8 @@ class UnreleasedHoldingsProvider(object):
         invD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
+        if self.__repoType == "pdb_ihm":
+            fn = fn.replace(".json", "_ihm.json")  # must do this to prevent overlapping filenames with PDB
         fp = os.path.join(dirPath, fn)
         self.__mU.mkdir(dirPath)
         #

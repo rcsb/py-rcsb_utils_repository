@@ -67,10 +67,26 @@ class UnreleasedHoldingsProviderTests(unittest.TestCase):
         except Exception as e:
             logger.exception("Failing with %s", str(e))
 
+    def testUnreleasedIhm(self):
+        """Test case - get unreleased holdings"""
+        try:
+            rmP = UnreleasedHoldingsProvider(self.__cachePath, useCache=False, repoType="pdb_ihm", storeCache=True)
+            ok = rmP.testCache()
+            self.assertTrue(ok)
+            cD = rmP.getInventory()
+            logger.info("unreleased inventory (%d)", len(cD))
+            retD, _ = rmP.getRcsbUnreleasedData()
+            if len(retD) > 0:
+                logger.info("first unreleased data item: %r", next(iter(retD.items())))
+
+        except Exception as e:
+            logger.exception("Failing with %s", str(e))
+
 
 def holdingsSuite():
     suiteSelect = unittest.TestSuite()
     suiteSelect.addTest(UnreleasedHoldingsProviderTests("testUnreleased"))
+    suiteSelect.addTest(UnreleasedHoldingsProviderTests("testUnreleasedIhm"))
     return suiteSelect
 
 

@@ -44,3 +44,6 @@
 22-Oct-2024 - V0.47 Remove dependency on edmaps holdings file (no longer generating Map Coefficient MTZ files);
                     Update CI/CD testing to use python 3.10
  7-Jan-2025 - V0.48 Handle validation data loading from mmCIF file
+ 3-Apr-2025 - V0.49 Add support for IHM model file loading and current holdings provider;
+                    Add support for inputPathList argument with remote loading (discoveryMode "remote") to enable
+                    explicit specification of local and remote input file paths (e.g. non-archive files)
