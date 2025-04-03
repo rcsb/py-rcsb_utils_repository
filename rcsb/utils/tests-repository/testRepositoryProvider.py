@@ -56,6 +56,7 @@ class RepositoryProviderTests(unittest.TestCase):
         """Test case - repository locator local path utilities"""
         rpP = RepositoryProvider(cfgOb=self.__cfgOb, discoveryMode="local", numProc=self.__numProc, fileLimit=self.__fileLimit, cachePath=self.__cachePath)
         for contentType in ["bird_chem_comp_core", "pdbx_core", "ihm_dev"]:
+            logger.info("test contentType %s", contentType)
             mergeContentTypes = None
             if contentType in ["pdbx_core"]:
                 mergeContentTypes = ["vrpt"]
@@ -72,26 +73,39 @@ class RepositoryProviderTests(unittest.TestCase):
                 logger.info("pdbx-core containerList (%d)", len(containerList))
                 self.assertEqual(len(containerList), len(locatorObjList))
                 for container in containerList:
-                    logger.debug("category names - (%d)", len(container.getObjNameList()))
+                    logger.info("container %r category names - (%d)", container.getName(), len(container.getObjNameList()))
+                    logger.debug("category names - (%r)", container.getObjNameList())
                     self.assertGreaterEqual(len(container.getObjNameList()), 50)
-            #
+
         for contentType in ["bird_chem_comp_core", "pdbx_core", "ihm_dev"]:
+            logger.info("test contentType %s", contentType)
             mergeContentTypes = None
             if contentType in ["pdbx_core"]:
                 mergeContentTypes = ["vrpt"]
             #
             locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            logger.info("locatorObjList len %r", len(locatorObjList))
+            logger.debug("locatorObjList %r", locatorObjList)
             pathList = rpP.getLocatorPaths(locatorObjList)
             self.assertEqual(len(locatorObjList), len(pathList))
             #
-            lCount = len(pathList)
             idCodes = rpP.getLocatorIdcodes(contentType, locatorObjList)
+            logger.debug("idCodes %r", idCodes)
             self.assertEqual(len(locatorObjList), len(idCodes))
             excludeList = idCodes[: int(len(idCodes) / 2)]
-            logger.debug("excludeList (%d) %r", len(excludeList), excludeList)
+            logger.info("excludeList (%d) first few: %r", len(excludeList), excludeList[0:3])
+            logger.debug("excludeList %r", excludeList)
             fL = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes, excludeIds=excludeList)
-            logger.debug("fL (%d)", len(fL))
-            self.assertEqual(lCount, len(fL) + len(excludeList))
+            logger.info("fL (%d) first few: %r", len(fL), fL[0:3])
+            logger.debug("fL %r", fL)
+            fLidCodes = rpP.getLocatorIdcodes(contentType, fL)
+            logger.info("fLidCodes %r", fLidCodes)
+            # Compare the returned set of ID codes with the excluded ID codes - should be empty
+            # Note that must use this for comparison since using "applyLimit" can result in different sets of
+            # IDs being returned depending on the order that the program assembles them into a list
+            excludedInfL = [id for id in excludeList if id in fLidCodes]
+            logger.info("excludedInfL %r", excludedInfL)
+            self.assertEqual(excludedInfL, 0)
 
     def testRemoteRepoUtils(self):
         """Test case - repository remote locator uri utilities"""
