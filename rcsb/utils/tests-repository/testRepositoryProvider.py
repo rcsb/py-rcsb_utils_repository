@@ -105,7 +105,7 @@ class RepositoryProviderTests(unittest.TestCase):
             # IDs being returned depending on the order that the program assembles them into a list
             excludedInfL = [id for id in excludeList if id in fLidCodes]
             logger.info("excludedInfL %r", excludedInfL)
-            self.assertEqual(excludedInfL, 0)
+            self.assertEqual(len(excludedInfL), 0)
 
     def testRemoteRepoUtils(self):
         """Test case - repository remote locator uri utilities"""
