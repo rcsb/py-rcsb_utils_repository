@@ -52,6 +52,47 @@ class RepositoryProviderTests(unittest.TestCase):
         endTime = time.time()
         logger.debug("Completed %s at %s (%.4f seconds)\n", self.id(), time.strftime("%Y %m %d %H:%M:%S", time.localtime()), endTime - self.__startTime)
 
+    def testLocalRepoUtils(self):
+        """Test case - repository locator local path utilities"""
+        rpP = RepositoryProvider(cfgOb=self.__cfgOb, discoveryMode="local", numProc=self.__numProc, fileLimit=self.__fileLimit, cachePath=self.__cachePath)
+        for contentType in ["bird_chem_comp_core", "pdbx_core", "ihm_dev"]:
+            mergeContentTypes = None
+            if contentType in ["pdbx_core"]:
+                mergeContentTypes = ["vrpt"]
+            #
+            locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            pathList = rpP.getLocatorPaths(locatorObjList)
+            locatorObjList2 = rpP.getLocatorsFromPaths(locatorObjList, pathList)
+            logger.info("%s pathList length %d", contentType, len(pathList))
+            self.assertEqual(len(locatorObjList), len(pathList))
+            self.assertEqual(len(locatorObjList), len(locatorObjList2))
+            if contentType == "pdbx_core":
+                logger.info("pdbx-core locators %d", len(locatorObjList))
+                containerList = rpP.getContainerList(locatorObjList)
+                logger.info("pdbx-core containerList (%d)", len(containerList))
+                self.assertEqual(len(containerList), len(locatorObjList))
+                for container in containerList:
+                    logger.debug("category names - (%d)", len(container.getObjNameList()))
+                    self.assertGreaterEqual(len(container.getObjNameList()), 50)
+            #
+        for contentType in ["bird_chem_comp_core", "pdbx_core", "ihm_dev"]:
+            mergeContentTypes = None
+            if contentType in ["pdbx_core"]:
+                mergeContentTypes = ["vrpt"]
+            #
+            locatorObjList = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes)
+            pathList = rpP.getLocatorPaths(locatorObjList)
+            self.assertEqual(len(locatorObjList), len(pathList))
+            #
+            lCount = len(pathList)
+            idCodes = rpP.getLocatorIdcodes(contentType, locatorObjList)
+            self.assertEqual(len(locatorObjList), len(idCodes))
+            excludeList = idCodes[: int(len(idCodes) / 2)]
+            logger.debug("excludeList (%d) %r", len(excludeList), excludeList)
+            fL = rpP.getLocatorObjList(contentType=contentType, mergeContentTypes=mergeContentTypes, excludeIds=excludeList)
+            logger.debug("fL (%d)", len(fL))
+            self.assertEqual(lCount, len(fL) + len(excludeList))
+
     def testRemoteRepoUtils(self):
         """Test case - repository remote locator uri utilities"""
         rpP = RepositoryProvider(cfgOb=self.__cfgOb, numProc=self.__numProc, fileLimit=self.__fileLimit, cachePath=self.__cachePath, discoveryMode="remote")
@@ -148,6 +189,7 @@ class RepositoryProviderTests(unittest.TestCase):
 
 def repoSuite():
     suiteSelect = unittest.TestSuite()
+    suiteSelect.addTest(RepositoryProviderTests("testLocalRepoUtils"))
     suiteSelect.addTest(RepositoryProviderTests("testRemoteRepoUtils"))
     suiteSelect.addTest(RepositoryProviderTests("testRemoteSelectedRepoUtilsIds"))
     suiteSelect.addTest(RepositoryProviderTests("testRemoteSelectedRepoUtilsPaths"))
