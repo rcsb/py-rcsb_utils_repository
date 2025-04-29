@@ -47,3 +47,4 @@
  3-Apr-2025 - V0.49 Add support for IHM model file loading and current holdings provider;
                     Add support for inputPathList argument with remote loading (discoveryMode "remote") to enable
                     explicit specification of local and remote input file paths (e.g. non-archive files)
+24-Apr-2025 - V0.50 Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
