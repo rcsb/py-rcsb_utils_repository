@@ -306,7 +306,7 @@ class RepositoryProvider(object):
                             # TO DELETE WHEN VALIDATION FILES FULLY POPULATE THESE CATEGORIES
                             # Interim fix for handling duplicated and partially populated primary data categories in vrpt mmcif files
                             # For now, these categories are hard-coded (entry, entity, and struct_asym)
-                            if mc.exists("pdbx_vrpt_summary"): # Limit this fix to vrpt mmcif files
+                            if mc.exists("pdbx_vrpt_summary"):  # Limit this fix to vrpt mmcif files
                                 objNameL = ["entry", "entity", "struct_asym"]
                                 for objName in objNameL:
                                     if mc.exists(objName):
