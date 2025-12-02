@@ -48,3 +48,4 @@
                     Add support for inputPathList argument with remote loading (discoveryMode "remote") to enable
                     explicit specification of local and remote input file paths (e.g. non-archive files)
 24-Apr-2025 - V0.50 Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
+ 2-Dec-2025 - V0.51 Switch to 'pyproject.toml' file and hatch build system, and update pipelines to Python 3.13
