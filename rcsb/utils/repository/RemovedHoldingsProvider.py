@@ -33,21 +33,18 @@ class RemovedHoldingsProvider(object):
         self.__mU = MarshalUtil(workPath=self.__dirPath)
         self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         #
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
-        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
+        baseUrl = kwargs.get("holdingsTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/pdb/holdings")
         #
         if self.__repoType == "pdb_ihm":
             baseUrl = baseUrl.replace("pdb/holdings", "pdb_ihm/holdings")
-            fallbackUrl = fallbackUrl.replace("pdb/holdings", "pdb_ihm/holdings")
         #
         urlTarget = os.path.join(baseUrl, "all_removed_entries.json.gz")
-        urlFallbackTarget = os.path.join(fallbackUrl, "all_removed_entries.json.gz")
         #
         # Currently no removed holdings for IHM
         if self.__repoType == "pdb_ihm":
             self.__invD = {}
         else:
-            self.__invD = self.__reload(urlTarget, urlFallbackTarget, self.__dirPath, useCache=useCache)
+            self.__invD = self.__reload(urlTarget, self.__dirPath, useCache=useCache)
 
     def testCache(self, minCount=1000):
         logger.info("Inventory length cD (%d)", len(self.__invD))
@@ -60,7 +57,7 @@ class RemovedHoldingsProvider(object):
     def getStatusCode(self, entryId):
         """Return the status code for the removed entry"""
         try:
-            return self.__invD[entryId.upper()]["status_code"]
+            return self.__invD[entryId]["status_code"]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return None
@@ -69,16 +66,16 @@ class RemovedHoldingsProvider(object):
         """Return the superseding entry ids"""
         try:
             sL = []
-            if isinstance(self.__invD[entryId.upper()]["superseded_by"], str):
-                sL = [self.__invD[entryId.upper()]["superseded_by"]]
+            if isinstance(self.__invD[entryId]["superseded_by"], str):
+                sL = [self.__invD[entryId]["superseded_by"]]
             else:
-                sL = self.__invD[entryId.upper()]["superseded_by"]
+                sL = self.__invD[entryId]["superseded_by"]
             if len(sL) > 0:
                 for recursiveEntry in sL:
-                    if isinstance(self.__invD[recursiveEntry.upper()]["superseded_by"], str):
-                        sL = sL + [self.__invD[recursiveEntry.upper()]["superseded_by"]]
-                    elif isinstance(self.__invD[recursiveEntry.upper()]["superseded_by"], list):
-                        sL = sL + self.__invD[recursiveEntry.upper()]["superseded_by"]
+                    if isinstance(self.__invD[recursiveEntry]["superseded_by"], str):
+                        sL = sL + [self.__invD[recursiveEntry]["superseded_by"]]
+                    elif isinstance(self.__invD[recursiveEntry]["superseded_by"], list):
+                        sL = sL + self.__invD[recursiveEntry]["superseded_by"]
                     else:
                         break
         except Exception as e:
@@ -99,7 +96,7 @@ class RemovedHoldingsProvider(object):
     def getRemovedInfo(self, entryId):
         """Return the dictionary describing the details for this removed entry"""
         try:
-            return self.__invD[entryId.upper()]
+            return self.__invD[entryId]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return {}
@@ -107,7 +104,7 @@ class RemovedHoldingsProvider(object):
     def getContentTypes(self, entryId):
         """Return the removed content types for the input entry identifier"""
         try:
-            return sorted(self.__invD[entryId.upper()]["content_type"].keys())
+            return sorted(self.__invD[entryId]["content_type"].keys())
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return []
@@ -116,9 +113,9 @@ class RemovedHoldingsProvider(object):
         """Return the removed content types for the input entry identifier"""
         try:
             return (
-                self.__invD[entryId.upper()]["content_type"][contentType]
-                if isinstance(self.__invD[entryId.upper()]["content_type"][contentType], list)
-                else [self.__invD[entryId.upper()]["content_type"][contentType]]
+                self.__invD[entryId]["content_type"][contentType]
+                if isinstance(self.__invD[entryId]["content_type"][contentType], list)
+                else [self.__invD[entryId]["content_type"][contentType]]
             )
         except Exception as e:
             logger.debug("Failing for %r %r with %s", entryId, contentType, str(e))
@@ -146,7 +143,7 @@ class RemovedHoldingsProvider(object):
             logger.exception("Failing for %r with %s", entryId, str(e))
         return []
 
-    def __reload(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+    def __reload(self, urlTarget, dirPath, useCache=True):
         invD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
@@ -161,15 +158,10 @@ class RemovedHoldingsProvider(object):
         else:
             invD = self.__mU.doImport(urlTarget, fmt="json")
             logger.info("Loaded inventory from %s (%r)", urlTarget, len(invD))
-            if len(invD) == 0:
-                invD = self.__mU.doImport(urlFallbackTarget, fmt="json")
-                logger.info("Loaded fallback inventory from %s (%r)", urlFallbackTarget, len(invD))
         #
         if self.__storeCache:
             logger.info("Fetch inventory from %s", urlTarget)
             ok = fU.get(urlTarget, fp)
-            if not ok:
-                ok = fU.get(urlFallbackTarget, fp)
         #
         return invD
 
@@ -278,9 +270,9 @@ class RemovedHoldingsProvider(object):
         for entryId, tD in invD.items():
             if "superseded_by" in tD:
                 if isinstance(tD["superseded_by"], str):
-                    replacedByD[entryId] = [tD["superseded_by"].upper()]
+                    replacedByD[entryId] = [tD["superseded_by"]]
                 else:
-                    replacedByD[entryId] = [t.upper() for t in tD["superseded_by"]]
+                    replacedByD[entryId] = [t for t in tD["superseded_by"]]
         for entryId, rIdL in replacedByD.items():
             for rId in rIdL:
                 replacesD.setdefault(rId, []).append(entryId)
@@ -308,9 +300,9 @@ class RemovedHoldingsProvider(object):
                     #
                     if oky == "id_codes_replaced_by":
                         if isinstance(qD["id_codes_replaced_by"], str):
-                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"].upper()]
+                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"]]
                         else:
-                            qD["id_codes_replaced_by"] = [t.upper() for t in qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [t for t in qD["id_codes_replaced_by"]]
                 trsfD[entryId] = qD
             else:
                 # --- removed ---
@@ -334,9 +326,9 @@ class RemovedHoldingsProvider(object):
                     #
                     if oky == "id_codes_replaced_by":
                         if isinstance(qD["id_codes_replaced_by"], str):
-                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"].upper()]
+                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"]]
                         else:
-                            qD["id_codes_replaced_by"] = [t.upper() for t in qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [t for t in qD["id_codes_replaced_by"]]
                     #
                 removedD[entryId] = qD
             #
@@ -355,9 +347,9 @@ class RemovedHoldingsProvider(object):
                         qD[oky] = tD[iky]
                     if oky == "id_codes_replaced_by":
                         if isinstance(qD["id_codes_replaced_by"], str):
-                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"].upper()]
+                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"]]
                         else:
-                            qD["id_codes_replaced_by"] = [t.upper() for t in qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [t for t in qD["id_codes_replaced_by"]]
                 #
                 insilicoD[entryId] = qD
             # --- audit authors ---

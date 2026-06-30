@@ -34,9 +34,8 @@ class UpdateHoldingsProvider(object):
             self.__updD = {}
         #
         else:
-            baseUrl = kwargs.get("updateTargetUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
-            fallbackUrl = kwargs.get("updateFallbackUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
-            self.__updD = self.__reloadUpdateLists(baseUrl, fallbackUrl, self.__dirPath, useCache=useCache)
+            baseUrl = kwargs.get("updateTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/pdb/data/status/latest")
+            self.__updD = self.__reloadUpdateLists(baseUrl, self.__dirPath, useCache=useCache)
 
     def testCache(self, minCount=100):
         logger.info("Length update updD (%d)", len(self.__updD) if self.__updD else 0)
@@ -49,12 +48,11 @@ class UpdateHoldingsProvider(object):
     def getUpdateData(self):
         return self.__updD
 
-    def __reloadUpdateLists(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+    def __reloadUpdateLists(self, urlTarget, dirPath, useCache=True):
         """Parse legacy lists defining the contents of the repository update
 
         Args:
             urlTarget (str): base url for ftp repository instance
-            urlFallbackTarget (str): fallback base url for ftp repository instance
             dirPath (str): cache directory path containing update list files
             **kwargs: unused
 
@@ -62,7 +60,6 @@ class UpdateHoldingsProvider(object):
             list: List of dictionaries containing rcsb_repository_holdings_update
 
         """
-        _ = urlFallbackTarget
         contentTypeList = ["pdb", "nmr", "cs", "sf", "nmrdata"]
         contentNameD = {
             "pdb": "coordinates",
@@ -91,7 +88,7 @@ class UpdateHoldingsProvider(object):
                         entryIdL = self.__mU.doImport(fp1, "list")
                         #
                         for entryId in entryIdL:
-                            entryId = entryId.strip().upper()
+                            entryId = entryId.strip()
                             uD.setdefault(entryId, []).append(contentNameD[contentType])
                             if contentType == "nmrdata":
                                 uD.setdefault(entryId, []).append("Combined NMR data (NMR-STAR)")

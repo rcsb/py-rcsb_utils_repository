@@ -38,6 +38,12 @@
 #                    Add support for inputPathList argument with REMOTE loading to enable explicit specification of
 #                    local and remote input file paths (e.g. non-archive files)
 #   24-Apr-2025   bv Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
+#
+# TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load
+#       Question remains on how to point to corresponding VRPT file if providing a list of local mmCIF structure file paths,
+#       ...or, can we just assume they are in the same directory as the structure now that we are using the Beta Archive??
+#       See [reverted] prev. attempt: https://github.com/rcsb/py-rcsb_utils_repository/pull/24
+#       And: https://github.com/rcsb/py-rcsb_utils_repository/commit/c7d025e092f611f38d2f5739479c53f1e3e6fd59
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -94,17 +100,16 @@ class RepositoryProvider(object):
         self.__configName = self.__cfgOb.getDefaultSectionName()
         #
         self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
-        self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
-        self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
-        # self.__baseUrlPDBDev = self.__cfgOb.getPath("PDBDEV_REPO_URL", sectionName=self.__configName, default="https://pdb-dev.wwpdb.org")
+        self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files-beta.wwpdb.org")
+        self.__baseDirPDB = self.__cfgOb.getPath("BASE_PDB_REPO_DIR", sectionName=self.__configName, default="pub/wwpdb")  # Added new config (will need to add to mock-data configs)
+        self.__baseRepoUrlPDB = os.path.join(self.__baseUrlPDB, self.__baseDirPDB)
         #
         self.__baseUrlCSM = self.__cfgOb.getPath("PDBX_COMP_MODEL_REPO_PATH", sectionName=self.__configName)
 
         self.__kwD = {
-            "holdingsTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "holdings"),
-            "holdingsFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "holdings"),
-            "updateTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "data", "status", "latest"),
-            "updateFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "data", "status", "latest"),
+            "holdingsTargetUrl": os.path.join(self.__baseRepoUrlPDB, "pdb", "holdings"),
+            "updateTargetUrl": os.path.join(self.__baseRepoUrlPDB, "pdb", "data", "status", "latest"),
+            "refHoldingsTargetUrl": os.path.join(self.__baseRepoUrlPDB, "refdata", "derived_data", "refdata_id_list.json.gz"),
             "filterType": "assign-dates",
         }
         #
@@ -374,6 +379,7 @@ class RepositoryProvider(object):
         return sorted(outputLocatorList) if outputLocatorList and isinstance(outputLocatorList[0], str) else outputLocatorList
 
     def __getLocatorListRemote(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None):
+        # TODO: UPDATE?
         outputLocatorList = []
         inputPathList = inputPathList if inputPathList else []  # List of local or remote URL paths to files; this takes precedence over inputIdCodeList
         idCodeList = inputIdCodeList if inputIdCodeList else []
@@ -465,40 +471,36 @@ class RepositoryProvider(object):
         uri = None
         _ = repositoryLayout
         try:
-            idCodel = idCode.lower()
-            if contentType == "bird":
-                # /pdb/refdata/bird/prd/1/
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "prd", idCode[-1], idCode + ".cif")
-            elif contentType == "bird_family":
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "family", idCode[-1], idCode + ".cif")
-            elif contentType in ["bird_chem_comp"]:
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "prdcc", idCode[-1], idCode + ".cif")
+            if contentType in ["bird", "bird_chem_comp"]:
+                # https://files-beta.wwpdb.org/birds/download/PRD_000006.cif
+                # https://files-beta.wwpdb.org/birds/download/PRDCC_000105.cif
+                uri = os.path.join(self.__baseUrlPDB, "birds", "download", idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
+            elif contentType in ["bird_family"]:  # TODO: merge with above when shortlink to FAM is ready
+                # https://files-beta.wwpdb.org/pub/wwpdb/refdata/bird/family/9/FAM_000079.cif
+                uri = os.path.join(self.__baseRepoUrlPDB, "refdata", "bird", "family", idCode[-1], idCode + ".cif")
+            #
             elif contentType in ["chem_comp", "chem_comp_core"]:
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "chem_comp", idCode[-1], idCode, idCode + ".cif")
+                # https://files-beta.wwpdb.org/ligands/download/ATP.cif
+                uri = os.path.join(self.__baseUrlPDB, "ligands", "download", idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
             #
             elif contentType in ["pdbx", "pdbx_core"]:
-                # pdb/data/structures/divided/mmCIF
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "divided", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
+                # https://files-beta.wwpdb.org/download/pdb_00001abc.cif.gz
+                uri = os.path.join(self.__baseUrlPDB, "download", idCode.lower() + ".cif.gz")  # TODO: OK to remove "lower()"?
             elif contentType in ["vrpt", "validation_report"]:
-                # /pdb/validation_reports/
-                # https://files.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.cif.gz")
-                # logger.info("uri %r", uri)
-            #
+                # https://files-beta.wwpdb.org/validation/download/pdb_0000100d_validation.cif.gz
+                uri = os.path.join(self.__baseUrlPDB, "validation", "download", idCode.lower() + "_validation.cif.gz")  # TODO: OK to remove "lower()"?
             elif contentType in ["pdbx_obsolete"]:
-                # pdb/data/structures/obsolete/mmCIF/
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "obsolete", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
+                # https://files-beta.wwpdb.org/download/pdb_000021gs.cif.gz
+                uri = os.path.join(self.__baseUrlPDB, "download", idCode.lower() + ".cif.gz")  # TODO: OK to remove "lower()"?
+            #
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
-                uri = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
+                # TODO: update? or is this OK left as is?
+                uri = os.path.join(self.__getRepoLocalPath(contentType), idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
             #
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                # File path template is:  <topRepoPath>/data/entries/<2-char-hash>/<4-char-id>/structures/<4-char-id>.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "pdb_ihm", "data", "entries", idCodel[1:3], idCodel, "structures", idCodel + ".cif.gz")
+                # https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz
+                uri = os.path.join(self.__baseUrlPDB, "download", idCode.lower() + ".cif.gz")  # TODO: OK to remove "lower()"?
             #
-            # elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-            #     # https://pdb-dev.wwpdb.org/cif/PDBDEV_00000001.cif
-            #     uri = os.path.join(self.__baseUrlPDBDev, "cif", idCode + ".cif")
-
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             else:
@@ -525,7 +527,6 @@ class RepositoryProvider(object):
                 idCode = tC.split("_")[0]
             else:
                 logger.warning("Unsupported contentType %s", contentType)
-            idCode = idCode.upper() if idCode else None
         except Exception as e:
             logger.exception("Failing for %r %r with %s", contentType, pth, str(e))
         return idCode
@@ -580,7 +581,7 @@ class RepositoryProvider(object):
             logger.info("original tIdL length (%r)", len(tIdL))
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                tIdL = [idCode for idCode in idCodeList if idCode in tIdD]
                 # idCodeList = [t.upper() for t in idCodeList]
                 # tIdL = list(set(tIdL).intersection(idCodeList))
                 logger.debug("idCodeList selected tIdL: %r", tIdL)
@@ -614,7 +615,7 @@ class RepositoryProvider(object):
             tIdL = self.__rhP.getEntryByStatus("OBS")
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                tIdL = [idCode for idCode in idCodeList if idCode in tIdD]
                 logger.info("idCodeList selected: %r", tIdL)
             #
             for tId in tIdL:
@@ -634,7 +635,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getBirdIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
@@ -653,7 +654,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getBirdFamilyIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
@@ -672,7 +673,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getChemCompIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
@@ -691,7 +692,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getBirdChemCompIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
@@ -1288,7 +1289,7 @@ class RepositoryProvider(object):
             #
             tIdL = []
             if idCodeList:
-                tIdL = [t.lower() for t in idCodeList if t.upper() in ihmChPD]
+                tIdL = [t.lower() for t in idCodeList if t in ihmChPD]
                 logger.debug("idCodeList selected tIdL: %r", tIdL)
                 logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
                 if len(tIdL) > 10:

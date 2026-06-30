@@ -31,18 +31,15 @@ class UnreleasedHoldingsProvider(object):
         self.__assignDates = "assign-dates" in self.__filterType
         self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         #
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
-        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
+        baseUrl = kwargs.get("holdingsTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/pdb/holdings")
         #
         if self.__repoType == "pdb_ihm":
             baseUrl = baseUrl.replace("pdb/holdings", "pdb_ihm/holdings")
-            fallbackUrl = fallbackUrl.replace("pdb/holdings", "pdb_ihm/holdings")
         #
         urlTarget = os.path.join(baseUrl, "unreleased_entries.json.gz")
-        urlFallbackTarget = os.path.join(fallbackUrl, "unreleased_entries.json.gz")
         #
         self.__mU = MarshalUtil(workPath=self.__dirPath)
-        self.__invD = self.__reload(urlTarget, urlFallbackTarget, self.__dirPath, useCache=useCache)
+        self.__invD = self.__reload(urlTarget, self.__dirPath, useCache=useCache)
 
     def testCache(self, minCount=5000):
         logger.info("Inventory length cD (%d)", len(self.__invD))
@@ -55,7 +52,7 @@ class UnreleasedHoldingsProvider(object):
     def getStatusCode(self, entryId):
         """Return the status code for the unreleased entry"""
         try:
-            return self.__invD[entryId.upper()]["status_code"]
+            return self.__invD[entryId]["status_code"]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return None
@@ -63,7 +60,7 @@ class UnreleasedHoldingsProvider(object):
     def getUnreleasedInfo(self, entryId):
         """Return the dictionary describing the details for this unreleased entry"""
         try:
-            return self.__invD[entryId.upper()]
+            return self.__invD[entryId]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return {}
@@ -76,7 +73,7 @@ class UnreleasedHoldingsProvider(object):
             logger.debug("Failing with %s", str(e))
         return {}
 
-    def __reload(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+    def __reload(self, urlTarget, dirPath, useCache=True):
         invD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
@@ -91,15 +88,10 @@ class UnreleasedHoldingsProvider(object):
         else:
             invD = self.__mU.doImport(urlTarget, fmt="json")
             logger.info("Loaded inventory from %s (%r)", urlTarget, len(invD))
-            if len(invD) == 0:
-                invD = self.__mU.doImport(urlFallbackTarget, fmt="json")
-                logger.info("Loaded fallback inventory from %s (%r)", urlFallbackTarget, len(invD))
         #
         if self.__storeCache:
             logger.info("Fetch inventory from %s", urlTarget)
             ok = fU.get(urlTarget, fp)
-            if not ok:
-                ok = fU.get(urlFallbackTarget, fp)
         #
         return invD
 

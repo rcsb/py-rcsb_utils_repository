@@ -84,8 +84,8 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
             #
             ctD, assemD = chP.getRcsbContentAndAssemblies()
             logger.info("ctD (%d) assemD (%d)", len(ctD), len(assemD))
-            logger.info("ctD for entryId %s: %r", entryId, ctD[entryId.upper()])
-            logger.info("assemD for entryId %s: %r", entryId, assemD[entryId.upper()])
+            logger.info("ctD for entryId %s: %r", entryId, ctD[entryId])
+            logger.info("assemD for entryId %s: %r", entryId, assemD[entryId])
 
         except Exception as e:
             logger.exception("Failing with %s", str(e))
@@ -123,8 +123,8 @@ class CurrentHoldingsProviderTests(unittest.TestCase):
             #
             ctD, assemD = chP.getRcsbContentAndAssemblies()
             logger.info("ctD (%d) assemD (%d)", len(ctD), len(assemD))
-            logger.info("ctD for entryId %s: %r", entryId, ctD[entryId.upper()])
-            logger.info("assemD for entryId %s: %r", entryId, assemD[entryId.upper()])
+            logger.info("ctD for entryId %s: %r", entryId, ctD[entryId])
+            logger.info("assemD for entryId %s: %r", entryId, assemD[entryId])
 
         except Exception as e:
             logger.exception("Failing with %s", str(e))
