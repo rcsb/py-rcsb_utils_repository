@@ -308,15 +308,16 @@ class RepositoryProvider(object):
                             logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
                             raise ValueError("locator object with leading path %r returned empty container list (%r)" % (dD["locator"], locatorObj))
                         for mc in mergeL:
-                            # TO DELETE WHEN VALIDATION FILES FULLY POPULATE THESE CATEGORIES
+                            # TODO: TO DELETE WHEN VALIDATION FILES FULLY POPULATE THESE CATEGORIES
                             # Interim fix for handling duplicated and partially populated primary data categories in vrpt mmcif files
                             # For now, these categories are hard-coded (entry, entity, and struct_asym)
                             if mc.exists("pdbx_vrpt_summary"):  # Limit this fix to vrpt mmcif files
                                 objNameL = ["entry", "entity", "struct_asym"]
+                                objToRemoveL = [objName for objName in objNameL if mc.exists(objName)]
+                                logger.debug("Removing categories from vrpt mmcif for entry %s: %r", mc.getName(), objToRemoveL)  # Change to DEBUG in Jul 2026 due to huge log volume
                                 for objName in objNameL:
                                     if mc.exists(objName):
                                         mc.remove(objName)
-                                        logger.info("Removing category %s from vrpt mmcif for entry %s", objName, mc.getName())
                             cL[mergeTarget].merge(mc)
                 else:
                     logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
