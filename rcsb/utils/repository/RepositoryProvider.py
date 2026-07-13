@@ -38,10 +38,13 @@
 #                    Add support for inputPathList argument with REMOTE loading to enable explicit specification of
 #                    local and remote input file paths (e.g. non-archive files)
 #   24-Apr-2025   bv Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
+#   13-Jul-2026  dwp Use shortlink URL for accessing structure files (instead of fully-formed hashed archive paths);
+#                    Update code for providing an inputPathList instead of a list of ID codes (useful for manual testing)
 #
-# TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load
-#       Question remains on how to point to corresponding VRPT file if providing a list of local mmCIF structure file paths,
-#       ...or, can we just assume they are in the same directory as the structure now that we are using the Beta Archive??
+# TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load.
+#       If need to include a validation report, make sure it is in the same directory as the specified input mmCIF structure file path.
+#       OTHER QUESTION--Do we ever think we will want to use other "mergeContentTypes" than "vrpt"? (at least for local loads)?
+#                       We may need it for bird chem comp core locally...so need to consider this when making above change.
 #       See [reverted] prev. attempt: https://github.com/rcsb/py-rcsb_utils_repository/pull/24
 #       And: https://github.com/rcsb/py-rcsb_utils_repository/commit/c7d025e092f611f38d2f5739479c53f1e3e6fd59
 ##
@@ -156,6 +159,7 @@ class RepositoryProvider(object):
         excludeIdsSet = set(excludeIds)
 
         if inputPathList:
+            logger.info("Getting locator object list with input inputPathList (len %d), first item: %r", len(inputPathList), inputPathList[0])
             locatorList = self.__getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
         else:
             locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
@@ -254,12 +258,20 @@ class RepositoryProvider(object):
                 if isinstance(locator, str):
                     kwD = HashableDict({})
                     oL = [HashableDict({"locator": locator, "fmt": "mmcif", "kwargs": kwD})]
-                    for mergeContentType in mergeContentTypes:
-                        _, fn = os.path.split(locator)
-                        idCode = fn[:4] if fn and len(fn) >= 8 else None
-                        mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
-                        if mergeLocator:
-                            oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
+                    mergeLocator = None
+                    # Only handle "vrpt" for local test loads
+                    ldir, fn = os.path.split(locator)
+                    idCode = fn.split(".")[0]
+                    if self.__fU.isLocal(locator):
+                        # Assume validation report is in same directory as structure file
+                        mergeLocator = os.path.join(ldir, idCode + "_validation.cif.gz")
+                        if mergeLocator and not self.__fU.exists(mergeLocator):
+                            logger.warning(f"Validation file not found: {mergeLocator}")
+                    else:
+                        mergeLocator = self.__getLocatorRemote("vrpt", idCode)
+                    logger.info(f"Merging {locator} with {mergeLocator}")
+                    if mergeLocator:
+                        oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                     lObj = tuple(oL)
                 else:
                     logger.error("Unexpected output locator type %r", locator)
@@ -472,13 +484,11 @@ class RepositoryProvider(object):
         uri = None
         _ = repositoryLayout
         try:
-            if contentType in ["bird", "bird_chem_comp"]:
+            if contentType in ["bird", "bird_chem_comp", "bird_family"]:
                 # https://files-beta.wwpdb.org/birds/download/PRD_000006.cif
                 # https://files-beta.wwpdb.org/birds/download/PRDCC_000105.cif
+                # https://files-beta.wwpdb.org/birds/download/FAM_000079.cif
                 uri = os.path.join(self.__baseUrlPDB, "birds", "download", idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
-            elif contentType in ["bird_family"]:  # TODO: merge with above when shortlink to FAM is ready
-                # https://files-beta.wwpdb.org/pub/wwpdb/refdata/bird/family/9/FAM_000079.cif
-                uri = os.path.join(self.__baseRepoUrlPDB, "refdata", "bird", "family", idCode[-1], idCode + ".cif")
             #
             elif contentType in ["chem_comp", "chem_comp_core"]:
                 # https://files-beta.wwpdb.org/ligands/download/ATP.cif
