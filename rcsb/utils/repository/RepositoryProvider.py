@@ -104,8 +104,7 @@ class RepositoryProvider(object):
         #
         self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
         self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files-beta.wwpdb.org")
-        self.__baseDirPDB = self.__cfgOb.getPath("BASE_PDB_REPO_DIR", sectionName=self.__configName, default="pub/wwpdb")  # Added new config (will need to add to mock-data configs)
-        self.__baseRepoUrlPDB = os.path.join(self.__baseUrlPDB, self.__baseDirPDB)
+        self.__baseRepoUrlPDB = os.path.join(self.__baseUrlPDB, "pub/wwpdb")
         #
         self.__baseUrlCSM = self.__cfgOb.getPath("PDBX_COMP_MODEL_REPO_PATH", sectionName=self.__configName)
 
