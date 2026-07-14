@@ -392,7 +392,6 @@ class RepositoryProvider(object):
         return sorted(outputLocatorList) if outputLocatorList and isinstance(outputLocatorList[0], str) else outputLocatorList
 
     def __getLocatorListRemote(self, contentType, inputPathList=None, inputIdCodeList=None, mergeContentTypes=None):
-        # TODO: UPDATE?
         outputLocatorList = []
         inputPathList = inputPathList if inputPathList else []  # List of local or remote URL paths to files; this takes precedence over inputIdCodeList
         idCodeList = inputIdCodeList if inputIdCodeList else []
@@ -488,29 +487,27 @@ class RepositoryProvider(object):
                 # https://files-beta.wwpdb.org/birds/download/PRD_000006.cif
                 # https://files-beta.wwpdb.org/birds/download/PRDCC_000105.cif
                 # https://files-beta.wwpdb.org/birds/download/FAM_000079.cif
-                uri = os.path.join(self.__baseUrlPDB, "birds", "download", idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
+                uri = os.path.join(self.__baseUrlPDB, "birds", "download", idCode + ".cif")  # idCode/filename is case-insensitive
             #
             elif contentType in ["chem_comp", "chem_comp_core"]:
                 # https://files-beta.wwpdb.org/ligands/download/ATP.cif
-                uri = os.path.join(self.__baseUrlPDB, "ligands", "download", idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
+                uri = os.path.join(self.__baseUrlPDB, "ligands", "download", idCode + ".cif")  # idCode/filename is case-insensitive
             #
-            elif contentType in ["pdbx", "pdbx_core"]:
-                # https://files-beta.wwpdb.org/download/pdb_00001abc.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "download", idCode.lower() + ".cif.gz")  # TODO: OK to remove "lower()"?
+            elif contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
+                # https://files-beta.wwpdb.org/download/pdb_00004hhb.cif.gz - Released PDB
+                # https://files-beta.wwpdb.org/download/pdb_000021gs.cif.gz - Obsolete PDB
+                uri = os.path.join(self.__baseUrlPDB, "download", idCode + ".cif.gz")  # idCode/filename is case-insensitive
             elif contentType in ["vrpt", "validation_report"]:
                 # https://files-beta.wwpdb.org/validation/download/pdb_0000100d_validation.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "validation", "download", idCode.lower() + "_validation.cif.gz")  # TODO: OK to remove "lower()"?
-            elif contentType in ["pdbx_obsolete"]:
-                # https://files-beta.wwpdb.org/download/pdb_000021gs.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "download", idCode.lower() + ".cif.gz")  # TODO: OK to remove "lower()"?
+                uri = os.path.join(self.__baseUrlPDB, "validation", "download", idCode + "_validation.cif.gz")  # idCode/filename is case-insensitive
             #
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 # TODO: update? or is this OK left as is?
                 uri = os.path.join(self.__getRepoLocalPath(contentType), idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
             #
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                # https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "download", idCode.lower() + ".cif.gz")  # TODO: OK to remove "lower()"?
+                # https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz - IHM
+                uri = os.path.join(self.__baseUrlPDB, "download", idCode + ".cif.gz")  # idCode/filename is case-insensitive
             #
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
@@ -773,7 +770,7 @@ class RepositoryProvider(object):
                         kwD = HashableDict({})
                         oL = [HashableDict({"locator": locator, "fmt": "mmcif", "kwargs": kwD})]
                         for mergeContentType in mergeContentTypes:
-                            idCode = fn[:4] if fn and len(fn) >= 8 else None
+                            idCode = fn[:4] if fn and len(fn) >= 8 else None  # TODO: update for extended IDs
                             mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
                             if mergeLocator:
                                 oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
