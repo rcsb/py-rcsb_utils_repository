@@ -41,8 +41,8 @@
 #   13-Jul-2026  dwp Use shortlink URL for accessing structure files (instead of fully-formed hashed archive paths);
 #                    Update code for providing an inputPathList instead of a list of ID codes (useful for manual testing)
 #
-# TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load.
-#       If need to include a validation report, make sure it is in the same directory as the specified input mmCIF structure file path.
+# TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load (via "inputPathList").
+#       If need to include a validation report, make sure it is in the same directory as the specified local input mmCIF structure file path.
 #       OTHER QUESTION--Do we ever think we will want to use other "mergeContentTypes" than "vrpt"? (at least for local loads)?
 #                       We may need it for bird chem comp core locally...so need to consider this when making above change.
 #       See [reverted] prev. attempt: https://github.com/rcsb/py-rcsb_utils_repository/pull/24
@@ -1286,8 +1286,8 @@ class RepositoryProvider(object):
 
         File path template is:  <topRepoPath>/data/entries/<2-char-hash>/<4-char-id>/structures/<4-char-id>.cif.gz
 
-        Example full public path: https://files.wwpdb.org/pub/pdb_ihm/data/entries/zz/8zz1/structures/8zz1.cif.gz
-        Example pre-release path: http://<pre...org>/pdb_ihm/data/entries/zz/8zz1/structures/8zz1.cif.gz
+        Example full public path: https://files-beta.wwpdb.org/pub/wwpdb/pdb_ihm/data/entries/zz/pdb_00008zz1/structures/pdb_00008zz1.cif.gz
+        Example shortlink path:   https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz
         """
         uL = []
         try:

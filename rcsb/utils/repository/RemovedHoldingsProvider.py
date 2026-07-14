@@ -380,7 +380,7 @@ class RemovedHoldingsProvider(object):
 
             "content_type": {
                     "pdb": [
-                        "/pdb/data/structures/models/current/pdb/ir/pdb2ir4.ent.gz"
+                        "/wwpdb/pdb/data/models/entries/a2/pdb_00001a20/structures/pdb_00001a20.pdb.gz"
                     ]
                 },
         """
@@ -388,7 +388,7 @@ class RemovedHoldingsProvider(object):
         for ct, pthL in ctD.items():
             if ct in ["pdb", "mmcif", "pdbml"]:
                 for pth in pthL:
-                    if pth.startswith("/pdb/data/structures/models"):
+                    if pth.startswith("/wwpdb/pdb/data/models"):
                         isModel = True
                         break
         return isModel
