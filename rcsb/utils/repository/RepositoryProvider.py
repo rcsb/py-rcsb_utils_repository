@@ -40,6 +40,9 @@
 #   24-Apr-2025   bv Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
 #   13-Jul-2026  dwp Use shortlink URL for accessing structure files (instead of fully-formed hashed archive paths);
 #                    Update code for providing an inputPathList instead of a list of ID codes (useful for manual testing)
+#   19-Oct-2026  dwp Only merge validation reports for inputPathList entries that have one (checked via file existence for local
+#                    paths, and via CurrentHoldingsProvider for remote paths); entries without one now load structure-only
+#                    instead of failing in __mergeContainers()
 #
 # TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load (via "inputPathList").
 #       If need to include a validation report, make sure it is in the same directory as the specified local input mmCIF structure file path.
@@ -258,18 +261,30 @@ class RepositoryProvider(object):
                     kwD = HashableDict({})
                     oL = [HashableDict({"locator": locator, "fmt": "mmcif", "kwargs": kwD})]
                     mergeLocator = None
+                    hasValidationData = False
                     # Only handle "vrpt" for local test loads
                     ldir, fn = os.path.split(locator)
                     idCode = fn.split(".")[0]
                     if self.__fU.isLocal(locator):
                         # Assume validation report is in same directory as structure file
                         mergeLocator = os.path.join(ldir, idCode + "_validation.cif.gz")
-                        if mergeLocator and not self.__fU.exists(mergeLocator):
-                            logger.warning(f"Validation file not found: {mergeLocator}")
+                        if mergeLocator and self.__fU.exists(mergeLocator):
+                            hasValidationData = True
                     else:
                         mergeLocator = self.__getLocatorRemote("vrpt", idCode)
-                    logger.info(f"Merging {locator} with {mergeLocator}")
-                    if mergeLocator:
+                        # TODO: Re-review this check later. It relies on the holdings inventory (which may lag behind newly added
+                        #       validation reports) and on idCode (taken from the filename) matching the holdings keys (e.g., "pdb_0000100d").
+                        if not self.__chP:
+                            logger.info("Initializing CurrentHoldingsProvider")
+                            self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
+                        if self.__chP.hasValidationReportData(idCode):
+                            hasValidationData = True
+                    #
+                    if not hasValidationData:
+                        logger.warning(f"Validation file not found: {mergeLocator}")
+                    #
+                    if mergeLocator and hasValidationData:
+                        logger.info(f"Merging {locator} with {mergeLocator}")
                         oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                     lObj = tuple(oL)
                 else:
