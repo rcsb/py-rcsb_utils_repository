@@ -310,7 +310,7 @@ class RepositoryProvider(object):
                             if mc.exists("pdbx_vrpt_summary"):  # Limit this fix to vrpt mmcif files
                                 objNameL = ["entry", "entity", "struct_asym"]
                                 objToRemoveL = [objName for objName in objNameL if mc.exists(objName)]
-                                logger.debug("Removing categories from vrpt mmcif for entry %s: %r", mc.getName(), objToRemoveL)  # Change to DEBUG in Jul 2026 due to huge log volume
+                                logger.debug("Removing categories from vrpt mmcif for entry %s: %r", mc.getName(), objToRemoveL)  # Change to DEBUG in Oct 2026 due to huge log volume
                                 for objName in objNameL:
                                     if mc.exists(objName):
                                         mc.remove(objName)
