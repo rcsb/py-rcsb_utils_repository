@@ -38,6 +38,7 @@
 #                    Add support for inputPathList argument with REMOTE loading to enable explicit specification of
 #                    local and remote input file paths (e.g. non-archive files)
 #   24-Apr-2025   bv Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
+#   26-Oct-2026  dwp Log the vrpt category removals once per entry at DEBUG level (instead of once per category at INFO)
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -303,15 +304,16 @@ class RepositoryProvider(object):
                             logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
                             raise ValueError("locator object with leading path %r returned empty container list (%r)" % (dD["locator"], locatorObj))
                         for mc in mergeL:
-                            # TO DELETE WHEN VALIDATION FILES FULLY POPULATE THESE CATEGORIES
+                            # TODO: TO DELETE WHEN VALIDATION FILES FULLY POPULATE THESE CATEGORIES
                             # Interim fix for handling duplicated and partially populated primary data categories in vrpt mmcif files
                             # For now, these categories are hard-coded (entry, entity, and struct_asym)
                             if mc.exists("pdbx_vrpt_summary"):  # Limit this fix to vrpt mmcif files
                                 objNameL = ["entry", "entity", "struct_asym"]
+                                objToRemoveL = [objName for objName in objNameL if mc.exists(objName)]
+                                logger.debug("Removing categories from vrpt mmcif for entry %s: %r", mc.getName(), objToRemoveL)  # Change to DEBUG in Oct 2026 due to huge log volume
                                 for objName in objNameL:
                                     if mc.exists(objName):
                                         mc.remove(objName)
-                                        logger.info("Removing category %s from vrpt mmcif for entry %s", objName, mc.getName())
                             cL[mergeTarget].merge(mc)
                 else:
                     logger.error("locator object with leading path %r returned empty container list (%r)", dD["locator"], locatorObj)
