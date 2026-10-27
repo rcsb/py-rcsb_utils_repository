@@ -43,6 +43,7 @@
 #   19-Oct-2026  dwp Only merge validation reports for inputPathList entries that have one (checked via file existence for local
 #                    paths, and via CurrentHoldingsProvider for remote paths); entries without one now load structure-only
 #                    instead of failing in __mergeContainers()
+#   26-Oct-2026  dwp Log the vrpt category removals once per entry at DEBUG level (instead of once per category at INFO)
 #
 # TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load (via "inputPathList").
 #       If need to include a validation report, make sure it is in the same directory as the specified local input mmCIF structure file path.
@@ -340,7 +341,7 @@ class RepositoryProvider(object):
                             if mc.exists("pdbx_vrpt_summary"):  # Limit this fix to vrpt mmcif files
                                 objNameL = ["entry", "entity", "struct_asym"]
                                 objToRemoveL = [objName for objName in objNameL if mc.exists(objName)]
-                                logger.debug("Removing categories from vrpt mmcif for entry %s: %r", mc.getName(), objToRemoveL)  # Change to DEBUG in Jul 2026 due to huge log volume
+                                logger.debug("Removing categories from vrpt mmcif for entry %s: %r", mc.getName(), objToRemoveL)  # Change to DEBUG in Oct 2026 due to huge log volume
                                 for objName in objNameL:
                                     if mc.exists(objName):
                                         mc.remove(objName)
