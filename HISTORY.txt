@@ -49,3 +49,4 @@
                     explicit specification of local and remote input file paths (e.g. non-archive files)
 24-Apr-2025 - V0.50 Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
  2-Dec-2025 - V0.51 Switch to 'pyproject.toml' file and hatch build system, and update pipelines to Python 3.13
+26-Oct-2026 - V0.52 Log the vrpt category removals in RepositoryProvider at DEBUG level (instead of INFO) to reduce ETL log volume

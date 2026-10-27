@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "rcsb.utils.repository"
 description = "RCSB Python Repository Data Management Utilities"
-version = "0.51"
+version = "0.52"
 readme = "README.md"
 authors = [
     { name="John Westbrook", email="john.westbrook@rcsb.org" }
