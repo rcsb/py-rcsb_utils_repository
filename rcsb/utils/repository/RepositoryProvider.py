@@ -47,7 +47,7 @@
 #   18-Nov-2026  dwp Build all remote URLs as archive server root + short link (same on the current and extended-id
 #                    archives): PDB_REPO_URL may name the server root or its "pub" dir (both work), holdings come
 #                    from the holdings short links; normalize entry id case by format (upper case short ids,
-#                    lower case extended ids) when matching holdings
+#                    lower case extended ids) when matching holdings; tidy up TODOs
 #
 # TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load (via "inputPathList").
 #       If need to include a validation report, make sure it is in the same directory as the specified local input mmCIF structure file path.
@@ -280,9 +280,7 @@ class RepositoryProvider(object):
                             hasValidationData = True
                     else:
                         mergeLocator = self.__getLocatorRemote("vrpt", idCode)
-                        # TODO: Re-review this check later. It relies on the holdings inventory (which may lag behind newly added
-                        #       validation reports) and on idCode (taken from the filename) being a holdings key once its case is
-                        #       normalized (e.g., "4hhb" -> "4HHB" on the current archive, "pdb_00004hhb" on the extended-id archive).
+                        # TODO: The holdings inventory may lag behind newly added validation reports (which are then skipped)
                         if not self.__chP:
                             logger.info("Initializing CurrentHoldingsProvider")
                             self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
@@ -525,8 +523,8 @@ class RepositoryProvider(object):
                 uri = os.path.join(self.__baseUrlPDB, "validation", "download", idCode + "_validation.cif.gz")  # idCode/filename is case-insensitive
             #
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
-                # TODO: update? or is this OK left as is?
-                uri = os.path.join(self.__getRepoLocalPath(contentType), idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
+                # TODO: Transition these contentTypes to fetch from remote if possible (not urgent, but eventually)
+                uri = os.path.join(self.__getRepoLocalPath(contentType), idCode.upper() + ".cif")
             #
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 # <archive root>/download/pdb_00008zz1.cif.gz - IHM
@@ -667,7 +665,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getBirdIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
@@ -686,7 +684,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getBirdFamilyIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
@@ -705,7 +703,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getChemCompIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
@@ -724,7 +722,7 @@ class RepositoryProvider(object):
             tIdL = self.__chP.getBirdChemCompIdList()
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]  # TODO: Check if removing forced ".upper()" works OK
+                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
                 logger.info("idCodeList selected: %r", tIdL)
             #
             kwD = HashableDict({})
