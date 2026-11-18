@@ -7,6 +7,9 @@
 #   18-Feb-2025  dwp Add blank support for IHM holdings file loading (return nothing, since
 #                    no corresponding update holdings files exist for IHM, nor are there
 #                    plans to provide them)
+#   18-Nov-2026  dwp Normalize entry id case by format (upper case short ids, lower case extended ids); remove the
+#                    unused fallback URL; note that
+#                    the update lists have no archive short links (callers that don't need them shouldn't load this)
 #
 ##
 """Provide inventory of current repository update.
@@ -17,6 +20,7 @@ import logging
 import os.path
 
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.repository.RepositoryHelper import normalizeEntryId
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +38,8 @@ class UpdateHoldingsProvider(object):
             self.__updD = {}
         #
         else:
-            baseUrl = kwargs.get("updateTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/pdb/data/status/latest")
+            # No short links exist for the update lists, so the default is the current archive's full path
+            baseUrl = kwargs.get("updateTargetUrl", "https://files.wwpdb.org/pub/pdb/data/status/latest")
             self.__updD = self.__reloadUpdateLists(baseUrl, self.__dirPath, useCache=useCache)
 
     def testCache(self, minCount=100):
@@ -88,7 +93,7 @@ class UpdateHoldingsProvider(object):
                         entryIdL = self.__mU.doImport(fp1, "list")
                         #
                         for entryId in entryIdL:
-                            entryId = entryId.strip()
+                            entryId = normalizeEntryId(entryId)
                             uD.setdefault(entryId, []).append(contentNameD[contentType])
                             if contentType == "nmrdata":
                                 uD.setdefault(entryId, []).append("Combined NMR data (NMR-STAR)")

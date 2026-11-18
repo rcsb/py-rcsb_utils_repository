@@ -8,6 +8,10 @@
 #    9-Sep-2024  dwp Always defer to loading holdings data from remote (rather than storing it locally)
 #   18-Feb-2025  dwp Add support for IHM holdings file loading (preemptive code for when removed IHM holdings
 #                    do become available)
+#   18-Nov-2026  dwp Default to the archive's holdings short links (same on the current and extended-id archives);
+#                    normalize entry id case by format
+#                    (upper case short ids, lower case extended ids) in lookups and superseded-by ids; detect
+#                    theoretical models in both archive layouts
 ##
 """Provide an inventory of removed repository content.
 """
@@ -17,6 +21,7 @@ import os.path
 import dateutil.parser
 from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.repository.RepositoryHelper import DEFAULT_ARCHIVE_ROOT_URL, getHoldingsUrl, getRepoTypeHoldingsUrl, normalizeEntryId
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +38,9 @@ class RemovedHoldingsProvider(object):
         self.__mU = MarshalUtil(workPath=self.__dirPath)
         self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         #
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/pdb/holdings")
-        #
-        if self.__repoType == "pdb_ihm":
-            baseUrl = baseUrl.replace("pdb/holdings", "pdb_ihm/holdings")
+        # Holdings directory: the holdings short link by default (e.g. "https://files.wwpdb.org/holdings/download/pdb",
+        # switched to "pdb_ihm" for IHM), or any directory URL the caller passes
+        baseUrl = getRepoTypeHoldingsUrl(kwargs.get("holdingsTargetUrl", getHoldingsUrl(DEFAULT_ARCHIVE_ROOT_URL, "pdb")), self.__repoType)
         #
         urlTarget = os.path.join(baseUrl, "all_removed_entries.json.gz")
         #
@@ -57,7 +61,7 @@ class RemovedHoldingsProvider(object):
     def getStatusCode(self, entryId):
         """Return the status code for the removed entry"""
         try:
-            return self.__invD[entryId]["status_code"]
+            return self.__invD[normalizeEntryId(entryId)]["status_code"]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return None
@@ -66,16 +70,16 @@ class RemovedHoldingsProvider(object):
         """Return the superseding entry ids"""
         try:
             sL = []
-            if isinstance(self.__invD[entryId]["superseded_by"], str):
-                sL = [self.__invD[entryId]["superseded_by"]]
+            if isinstance(self.__invD[normalizeEntryId(entryId)]["superseded_by"], str):
+                sL = [self.__invD[normalizeEntryId(entryId)]["superseded_by"]]
             else:
-                sL = self.__invD[entryId]["superseded_by"]
+                sL = self.__invD[normalizeEntryId(entryId)]["superseded_by"]
             if len(sL) > 0:
                 for recursiveEntry in sL:
-                    if isinstance(self.__invD[recursiveEntry]["superseded_by"], str):
-                        sL = sL + [self.__invD[recursiveEntry]["superseded_by"]]
-                    elif isinstance(self.__invD[recursiveEntry]["superseded_by"], list):
-                        sL = sL + self.__invD[recursiveEntry]["superseded_by"]
+                    if isinstance(self.__invD[normalizeEntryId(recursiveEntry)]["superseded_by"], str):
+                        sL = sL + [self.__invD[normalizeEntryId(recursiveEntry)]["superseded_by"]]
+                    elif isinstance(self.__invD[normalizeEntryId(recursiveEntry)]["superseded_by"], list):
+                        sL = sL + self.__invD[normalizeEntryId(recursiveEntry)]["superseded_by"]
                     else:
                         break
         except Exception as e:
@@ -96,7 +100,7 @@ class RemovedHoldingsProvider(object):
     def getRemovedInfo(self, entryId):
         """Return the dictionary describing the details for this removed entry"""
         try:
-            return self.__invD[entryId]
+            return self.__invD[normalizeEntryId(entryId)]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return {}
@@ -104,7 +108,7 @@ class RemovedHoldingsProvider(object):
     def getContentTypes(self, entryId):
         """Return the removed content types for the input entry identifier"""
         try:
-            return sorted(self.__invD[entryId]["content_type"].keys())
+            return sorted(self.__invD[normalizeEntryId(entryId)]["content_type"].keys())
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return []
@@ -113,9 +117,9 @@ class RemovedHoldingsProvider(object):
         """Return the removed content types for the input entry identifier"""
         try:
             return (
-                self.__invD[entryId]["content_type"][contentType]
-                if isinstance(self.__invD[entryId]["content_type"][contentType], list)
-                else [self.__invD[entryId]["content_type"][contentType]]
+                self.__invD[normalizeEntryId(entryId)]["content_type"][contentType]
+                if isinstance(self.__invD[normalizeEntryId(entryId)]["content_type"][contentType], list)
+                else [self.__invD[normalizeEntryId(entryId)]["content_type"][contentType]]
             )
         except Exception as e:
             logger.debug("Failing for %r %r with %s", entryId, contentType, str(e))
@@ -161,7 +165,7 @@ class RemovedHoldingsProvider(object):
         #
         if self.__storeCache:
             logger.info("Fetch inventory from %s", urlTarget)
-            ok = fU.get(urlTarget, fp)
+            fU.get(urlTarget, fp)
         #
         return invD
 
@@ -270,9 +274,9 @@ class RemovedHoldingsProvider(object):
         for entryId, tD in invD.items():
             if "superseded_by" in tD:
                 if isinstance(tD["superseded_by"], str):
-                    replacedByD[entryId] = [tD["superseded_by"]]
+                    replacedByD[entryId] = [normalizeEntryId(tD["superseded_by"])]
                 else:
-                    replacedByD[entryId] = [t for t in tD["superseded_by"]]
+                    replacedByD[entryId] = [normalizeEntryId(t) for t in tD["superseded_by"]]
         for entryId, rIdL in replacedByD.items():
             for rId in rIdL:
                 replacesD.setdefault(rId, []).append(entryId)
@@ -300,9 +304,9 @@ class RemovedHoldingsProvider(object):
                     #
                     if oky == "id_codes_replaced_by":
                         if isinstance(qD["id_codes_replaced_by"], str):
-                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [normalizeEntryId(qD["id_codes_replaced_by"])]
                         else:
-                            qD["id_codes_replaced_by"] = [t for t in qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [normalizeEntryId(t) for t in qD["id_codes_replaced_by"]]
                 trsfD[entryId] = qD
             else:
                 # --- removed ---
@@ -326,9 +330,9 @@ class RemovedHoldingsProvider(object):
                     #
                     if oky == "id_codes_replaced_by":
                         if isinstance(qD["id_codes_replaced_by"], str):
-                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [normalizeEntryId(qD["id_codes_replaced_by"])]
                         else:
-                            qD["id_codes_replaced_by"] = [t for t in qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [normalizeEntryId(t) for t in qD["id_codes_replaced_by"]]
                     #
                 removedD[entryId] = qD
             #
@@ -347,9 +351,9 @@ class RemovedHoldingsProvider(object):
                         qD[oky] = tD[iky]
                     if oky == "id_codes_replaced_by":
                         if isinstance(qD["id_codes_replaced_by"], str):
-                            qD["id_codes_replaced_by"] = [qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [normalizeEntryId(qD["id_codes_replaced_by"])]
                         else:
-                            qD["id_codes_replaced_by"] = [t for t in qD["id_codes_replaced_by"]]
+                            qD["id_codes_replaced_by"] = [normalizeEntryId(t) for t in qD["id_codes_replaced_by"]]
                 #
                 insilicoD[entryId] = qD
             # --- audit authors ---
@@ -380,7 +384,8 @@ class RemovedHoldingsProvider(object):
 
             "content_type": {
                     "pdb": [
-                        "/wwpdb/pdb/data/models/entries/a2/pdb_00001a20/structures/pdb_00001a20.pdb.gz"
+                        "/pdb/data/structures/models/current/pdb/ir/pdb2ir4.ent.gz"  (current archive)
+                        "/wwpdb/pdb/data/models/entries/a2/pdb_00001a20/structures/pdb_00001a20.pdb.gz"  (extended-id archive)
                     ]
                 },
         """
@@ -388,7 +393,7 @@ class RemovedHoldingsProvider(object):
         for ct, pthL in ctD.items():
             if ct in ["pdb", "mmcif", "pdbml"]:
                 for pth in pthL:
-                    if pth.startswith("/wwpdb/pdb/data/models"):
+                    if pth.startswith(("/pdb/data/structures/models", "/wwpdb/pdb/data/models")):
                         isModel = True
                         break
         return isModel

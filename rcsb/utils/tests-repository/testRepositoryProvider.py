@@ -5,7 +5,7 @@
 # Version: 0.001
 #
 # Updates:
-
+#   18-Nov-2026 dwp Remote input paths use archive short links (the same on the current and extended-id archives)
 ##
 """
 Tests repository path and object utilities.
@@ -171,7 +171,7 @@ class RepositoryProviderTests(unittest.TestCase):
     def testRemoteSelectedRepoUtilsPaths(self):
         inputPathList = [
             os.path.join(self.__mockTopPath, "MOCK_PDBX_SANDBOX", "ds/1dsr/1dsr.cif.gz"),
-            "https://files-beta.wwpdb.org/pub/wwpdb/pdb/data/entries/hh/pdb_00004hhb/structures/pdb_00004hhb.cif.gz"
+            "https://files.wwpdb.org/download/4hhb.cif.gz"
         ]
         rpP = RepositoryProvider(cfgOb=self.__cfgOb, numProc=self.__numProc, fileLimit=None, cachePath=self.__cachePath, discoveryMode="remote")
         locatorObjList = rpP.getLocatorObjList(inputPathList=inputPathList, contentType="pdbx_core", mergeContentTypes=["vrpt"])
@@ -188,8 +188,8 @@ class RepositoryProviderTests(unittest.TestCase):
         #
         inputPathList = [
             os.path.join(self.__mockTopPath, "MOCK_CHEM_COMP_REPO", "A/ATP/ATP.cif"),
-            "https://files-beta.wwpdb.org/pub/wwpdb/refdata/chem_comp/P/GTP/GTP.cif",
-            "https://files-beta.wwpdb.org/pub/wwpdb/refdata/chem_comp/S/A1A3S/A1A3S.cif"
+            "https://files.wwpdb.org/ligands/download/GTP.cif",
+            "https://files.wwpdb.org/ligands/download/A1A3S.cif"
         ]
         locatorObjList = rpP.getLocatorObjList(inputPathList=inputPathList, contentType="chem_comp")
         logger.info("locatorObjList %r", locatorObjList)

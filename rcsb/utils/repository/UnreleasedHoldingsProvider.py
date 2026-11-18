@@ -6,6 +6,9 @@
 #   12-Jun-2023  dwp Set useCache default to False to force redownloading of holdings files
 #    9-Sep-2024  dwp Always defer to loading holdings data from remote (rather than storing it locally)
 #   28-Jan-2025  dwp Add support for IHM holdings file loading
+#   18-Nov-2026  dwp Default to the archive's holdings short links (same on the current and extended-id archives);
+#                    normalize entry id case by format
+#                    in lookups (upper case short ids, lower case extended ids)
 #
 ##
 """Provide an inventory of unreleased repository content.
@@ -17,6 +20,7 @@ import os.path
 import dateutil.parser
 from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.repository.RepositoryHelper import DEFAULT_ARCHIVE_ROOT_URL, getHoldingsUrl, getRepoTypeHoldingsUrl, normalizeEntryId
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +35,9 @@ class UnreleasedHoldingsProvider(object):
         self.__assignDates = "assign-dates" in self.__filterType
         self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         #
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/pdb/holdings")
-        #
-        if self.__repoType == "pdb_ihm":
-            baseUrl = baseUrl.replace("pdb/holdings", "pdb_ihm/holdings")
+        # Holdings directory: the holdings short link by default (e.g. "https://files.wwpdb.org/holdings/download/pdb",
+        # switched to "pdb_ihm" for IHM), or any directory URL the caller passes
+        baseUrl = getRepoTypeHoldingsUrl(kwargs.get("holdingsTargetUrl", getHoldingsUrl(DEFAULT_ARCHIVE_ROOT_URL, "pdb")), self.__repoType)
         #
         urlTarget = os.path.join(baseUrl, "unreleased_entries.json.gz")
         #
@@ -52,7 +55,7 @@ class UnreleasedHoldingsProvider(object):
     def getStatusCode(self, entryId):
         """Return the status code for the unreleased entry"""
         try:
-            return self.__invD[entryId]["status_code"]
+            return self.__invD[normalizeEntryId(entryId)]["status_code"]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return None
@@ -60,7 +63,7 @@ class UnreleasedHoldingsProvider(object):
     def getUnreleasedInfo(self, entryId):
         """Return the dictionary describing the details for this unreleased entry"""
         try:
-            return self.__invD[entryId]
+            return self.__invD[normalizeEntryId(entryId)]
         except Exception as e:
             logger.debug("Failing for %r with %s", entryId, str(e))
         return {}
@@ -91,7 +94,7 @@ class UnreleasedHoldingsProvider(object):
         #
         if self.__storeCache:
             logger.info("Fetch inventory from %s", urlTarget)
-            ok = fU.get(urlTarget, fp)
+            fU.get(urlTarget, fp)
         #
         return invD
 

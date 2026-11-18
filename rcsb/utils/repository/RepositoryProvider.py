@@ -44,6 +44,10 @@
 #                    paths, and via CurrentHoldingsProvider for remote paths); entries without one now load structure-only
 #                    instead of failing in __mergeContainers()
 #   26-Oct-2026  dwp Log the vrpt category removals once per entry at DEBUG level (instead of once per category at INFO)
+#   18-Nov-2026  dwp Build all remote URLs as archive server root + short link (same on the current and extended-id
+#                    archives): PDB_REPO_URL may name the server root or its "pub" dir (both work), holdings come
+#                    from the holdings short links; normalize entry id case by format (upper case short ids,
+#                    lower case extended ids) when matching holdings
 #
 # TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load (via "inputPathList").
 #       If need to include a validation report, make sure it is in the same directory as the specified local input mmCIF structure file path.
@@ -69,6 +73,7 @@ from rcsb.utils.io.HashableDict import HashableDict
 from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
+from rcsb.utils.repository.RepositoryHelper import DEFAULT_ARCHIVE_ROOT_URL, getRepositoryRootUrl, getHoldingsUrl, normalizeEntryId
 from rcsb.utils.repository.CurrentHoldingsProvider import CurrentHoldingsProvider
 from rcsb.utils.repository.RemovedHoldingsProvider import RemovedHoldingsProvider
 from rcsb.utils.validation.ValidationReportAdapter import ValidationReportAdapter
@@ -107,15 +112,17 @@ class RepositoryProvider(object):
         self.__configName = self.__cfgOb.getDefaultSectionName()
         #
         self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
-        self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files-beta.wwpdb.org")
-        self.__baseRepoUrlPDB = os.path.join(self.__baseUrlPDB, "pub/wwpdb")
+        # Archive server roots (e.g. "https://files.wwpdb.org"): all remote content is addressed by short link, which are the
+        # same on the current and the extended-id archive. A configured URL ending in "/pub" (current archive configs) also works.
+        self.__baseUrlPDB = getRepositoryRootUrl(self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default=DEFAULT_ARCHIVE_ROOT_URL))
+        logger.info("PDB archive root %r", self.__baseUrlPDB)
         #
         self.__baseUrlCSM = self.__cfgOb.getPath("PDBX_COMP_MODEL_REPO_PATH", sectionName=self.__configName)
 
+        # IHM holdings providers get the same arguments with repoType="pdb_ihm" and switch to the pdb_ihm short links themselves
         self.__kwD = {
-            "holdingsTargetUrl": os.path.join(self.__baseRepoUrlPDB, "pdb", "holdings"),
-            "updateTargetUrl": os.path.join(self.__baseRepoUrlPDB, "pdb", "data", "status", "latest"),
-            "refHoldingsTargetUrl": os.path.join(self.__baseRepoUrlPDB, "refdata", "derived_data", "refdata_id_list.json.gz"),
+            "holdingsTargetUrl": getHoldingsUrl(self.__baseUrlPDB, "pdb"),
+            "refHoldingsTargetUrl": os.path.join(getHoldingsUrl(self.__baseUrlPDB, "refdata"), "refdata_id_list.json.gz"),
             "filterType": "assign-dates",
         }
         #
@@ -274,7 +281,8 @@ class RepositoryProvider(object):
                     else:
                         mergeLocator = self.__getLocatorRemote("vrpt", idCode)
                         # TODO: Re-review this check later. It relies on the holdings inventory (which may lag behind newly added
-                        #       validation reports) and on idCode (taken from the filename) matching the holdings keys (e.g., "pdb_0000100d").
+                        #       validation reports) and on idCode (taken from the filename) being a holdings key once its case is
+                        #       normalized (e.g., "4hhb" -> "4HHB" on the current archive, "pdb_00004hhb" on the extended-id archive).
                         if not self.__chP:
                             logger.info("Initializing CurrentHoldingsProvider")
                             self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
@@ -282,10 +290,10 @@ class RepositoryProvider(object):
                             hasValidationData = True
                     #
                     if not hasValidationData:
-                        logger.warning(f"Validation file not found: {mergeLocator}")
+                        logger.warning("Validation file not found: %s", mergeLocator)
                     #
                     if mergeLocator and hasValidationData:
-                        logger.info(f"Merging {locator} with {mergeLocator}")
+                        logger.info("Merging %s with %s", locator, mergeLocator)
                         oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                     lObj = tuple(oL)
                 else:
@@ -499,21 +507,21 @@ class RepositoryProvider(object):
         _ = repositoryLayout
         try:
             if contentType in ["bird", "bird_chem_comp", "bird_family"]:
-                # https://files-beta.wwpdb.org/birds/download/PRD_000006.cif
-                # https://files-beta.wwpdb.org/birds/download/PRDCC_000105.cif
-                # https://files-beta.wwpdb.org/birds/download/FAM_000079.cif
+                # <archive root>/birds/download/PRD_000006.cif
+                # <archive root>/birds/download/PRDCC_000105.cif
+                # <archive root>/birds/download/FAM_000079.cif
                 uri = os.path.join(self.__baseUrlPDB, "birds", "download", idCode + ".cif")  # idCode/filename is case-insensitive
             #
             elif contentType in ["chem_comp", "chem_comp_core"]:
-                # https://files-beta.wwpdb.org/ligands/download/ATP.cif
+                # <archive root>/ligands/download/ATP.cif
                 uri = os.path.join(self.__baseUrlPDB, "ligands", "download", idCode + ".cif")  # idCode/filename is case-insensitive
             #
             elif contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
-                # https://files-beta.wwpdb.org/download/pdb_00004hhb.cif.gz - Released PDB
-                # https://files-beta.wwpdb.org/download/pdb_000021gs.cif.gz - Obsolete PDB
+                # <archive root>/download/pdb_00004hhb.cif.gz (or 4hhb.cif.gz on the current archive) - Released PDB
+                # <archive root>/download/pdb_000021gs.cif.gz - Obsolete PDB
                 uri = os.path.join(self.__baseUrlPDB, "download", idCode + ".cif.gz")  # idCode/filename is case-insensitive
             elif contentType in ["vrpt", "validation_report"]:
-                # https://files-beta.wwpdb.org/validation/download/pdb_0000100d_validation.cif.gz
+                # <archive root>/validation/download/pdb_0000100d_validation.cif.gz
                 uri = os.path.join(self.__baseUrlPDB, "validation", "download", idCode + "_validation.cif.gz")  # idCode/filename is case-insensitive
             #
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
@@ -521,7 +529,7 @@ class RepositoryProvider(object):
                 uri = os.path.join(self.__getRepoLocalPath(contentType), idCode.upper() + ".cif")  # TODO: OK to remove "upper()"?
             #
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                # https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz - IHM
+                # <archive root>/download/pdb_00008zz1.cif.gz - IHM
                 uri = os.path.join(self.__baseUrlPDB, "download", idCode + ".cif.gz")  # idCode/filename is case-insensitive
             #
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
@@ -538,16 +546,19 @@ class RepositoryProvider(object):
         idCode = None
         try:
             bn = os.path.basename(pth)
-            if contentType in ["pdbx", "pdbx_core", "pdbx_obsolete", "bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
-                idCode = bn.split(".")[0]
+            if contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
+                idCode = normalizeEntryId(bn.split(".")[0])
+            elif contentType in ["bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
+                idCode = bn.split(".")[0].upper()
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 tC = bn.split(".")[0]
-                idCode = "_".join(tC.split("_")[:2])
+                idCode = normalizeEntryId("_".join(tC.split("_")[:2]))
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 idCode = None
             elif contentType in ["vrpt"]:
                 tC = bn.split(".")[0]
-                idCode = tC.split("_")[0]
+                # e.g. "pdb_00004hhb_validation" or "4hhb_validation"
+                idCode = normalizeEntryId(tC[: -len("_validation")] if tC.lower().endswith("_validation") else tC.split("_")[0])
             else:
                 logger.warning("Unsupported contentType %s", contentType)
         except Exception as e:
@@ -604,9 +615,7 @@ class RepositoryProvider(object):
             logger.info("original tIdL length (%r)", len(tIdL))
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode for idCode in idCodeList if idCode in tIdD]
-                # idCodeList = [t.upper() for t in idCodeList]
-                # tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdL = [normalizeEntryId(idCode) for idCode in idCodeList if normalizeEntryId(idCode) in tIdD]
                 logger.debug("idCodeList selected tIdL: %r", tIdL)
                 logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
                 if len(tIdL) > 10:
@@ -638,7 +647,7 @@ class RepositoryProvider(object):
             tIdL = self.__rhP.getEntryByStatus("OBS")
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode for idCode in idCodeList if idCode in tIdD]
+                tIdL = [normalizeEntryId(idCode) for idCode in idCodeList if normalizeEntryId(idCode) in tIdD]
                 logger.info("idCodeList selected: %r", tIdL)
             #
             for tId in tIdL:
@@ -1299,7 +1308,8 @@ class RepositoryProvider(object):
         File path template is:  <topRepoPath>/data/entries/<2-char-hash>/<4-char-id>/structures/<4-char-id>.cif.gz
 
         Example full public path: https://files-beta.wwpdb.org/pub/wwpdb/pdb_ihm/data/entries/zz/pdb_00008zz1/structures/pdb_00008zz1.cif.gz
-        Example shortlink path:   https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz
+        Example shortlink path:   https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz (same short link on both archives,
+                                  e.g. https://files.wwpdb.org/download/8zz1.cif.gz on the current archive)
         """
         uL = []
         try:
@@ -1312,7 +1322,7 @@ class RepositoryProvider(object):
             #
             tIdL = []
             if idCodeList:
-                tIdL = [t.lower() for t in idCodeList if t in ihmChPD]
+                tIdL = [t.lower() for t in idCodeList if normalizeEntryId(t) in ihmChPD]
                 logger.debug("idCodeList selected tIdL: %r", tIdL)
                 logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
                 if len(tIdL) > 10:

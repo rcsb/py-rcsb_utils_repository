@@ -10,6 +10,10 @@
 #                    Add validation coefficients to list of repository_content_types
 #   16-Oct-2024  dwp Remove usage of EDMAPS holdings file
 #   28-Jan-2025  dwp Add support for IHM holdings file loading
+#   18-Nov-2026  dwp Default to the archive's holdings short links (same on the current and extended-id archives),
+#                    with the reference data ID list from its own short link (refHoldingsTargetUrl; any full URL
+#                    can still be passed); normalize entry id case by format in lookups (upper case short ids,
+#                    lower case extended ids)
 #
 ##
 """Provide inventory of current repository content.
@@ -23,6 +27,7 @@ import pytz
 
 from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.repository.RepositoryHelper import DEFAULT_ARCHIVE_ROOT_URL, getHoldingsUrl, getRepoTypeHoldingsUrl, normalizeEntryId
 from rcsb.utils.struct.EntryInfoProvider import EntryInfoProvider
 
 logger = logging.getLogger(__name__)
@@ -37,14 +42,12 @@ class CurrentHoldingsProvider(object):
         self.__storeCache = kwargs.get("storeCache", False)
         self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         #
-        basePdbHoldingsUrl = kwargs.get("holdingsTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/pdb/holdings")
-        refHoldingsTargetUrl = kwargs.get("refHoldingsTargetUrl", "https://files-beta.wwpdb.org/pub/wwpdb/refdata/derived_data/refdata_id_list.json.gz")
+        # Holdings directory: the holdings short link by default (e.g. "https://files.wwpdb.org/holdings/download/pdb",
+        # switched to "pdb_ihm" for IHM), or any directory URL the caller passes
+        baseUrl = getRepoTypeHoldingsUrl(kwargs.get("holdingsTargetUrl", getHoldingsUrl(DEFAULT_ARCHIVE_ROOT_URL, "pdb")), self.__repoType)
         #
-        if self.__repoType == "pdb_ihm":
-            basePdbHoldingsUrl = basePdbHoldingsUrl.replace("pdb/holdings", "pdb_ihm/holdings")
-        #
-        entryUrlContent = os.path.join(basePdbHoldingsUrl, "current_file_holdings.json.gz")
-        entryUrlIds = os.path.join(basePdbHoldingsUrl, "released_structures_last_modified_dates.json.gz")
+        entryUrlContent = os.path.join(baseUrl, "current_file_holdings.json.gz")
+        entryUrlIds = os.path.join(baseUrl, "released_structures_last_modified_dates.json.gz")
         #
         self.__mU = MarshalUtil(workPath=self.__dirPath)
         #
@@ -53,7 +56,8 @@ class CurrentHoldingsProvider(object):
         self.__refD = {}
         #
         if self.__repoType != "pdb_ihm":
-            self.__refD = self.__reloadRefdataIds(refHoldingsTargetUrl, self.__dirPath, useCache=useCache)
+            refdataUrlIds = kwargs.get("refHoldingsTargetUrl", os.path.join(getHoldingsUrl(DEFAULT_ARCHIVE_ROOT_URL, "refdata"), "refdata_id_list.json.gz"))
+            self.__refD = self.__reloadRefdataIds(refdataUrlIds, self.__dirPath, useCache=useCache)
         #
         # EntryInfoProvider must be cached before this class is invoked -
         self.__eiP = EntryInfoProvider(cachePath=self.__cachePath, useCache=True)
@@ -74,7 +78,7 @@ class CurrentHoldingsProvider(object):
     def hasEntryContentType(self, entryId, contentType):
         """Return if the current content types is available for the input entry identifier"""
         try:
-            return contentType in self.__invD[entryId]
+            return contentType in self.__invD[normalizeEntryId(entryId)]
         except Exception as e:
             logger.exception("Failing for %r with %s", entryId, str(e))
         return False
@@ -82,7 +86,7 @@ class CurrentHoldingsProvider(object):
     def getEntryContentTypes(self, entryId):
         """Return the current content types for the input entry identifier"""
         try:
-            return sorted(self.__invD[entryId].keys())
+            return sorted(self.__invD[normalizeEntryId(entryId)].keys())
         except Exception as e:
             logger.exception("Failing for %r with %s", entryId, str(e))
         return []
@@ -103,7 +107,7 @@ class CurrentHoldingsProvider(object):
     def getEntryContentTypePathList(self, entryId, contentType):
         """Return the current content types for the input entry identifier"""
         try:
-            return self.__invD[entryId][contentType]
+            return self.__invD[normalizeEntryId(entryId)][contentType]
         except Exception as e:
             logger.debug("Failing for %r %r with %s", entryId, contentType, str(e))
         return []
@@ -170,6 +174,7 @@ class CurrentHoldingsProvider(object):
         return self.__hasValidationReportData(self.__invD, entryId)
 
     def __hasValidationReportData(self, invD, entryId):
+        entryId = normalizeEntryId(entryId)
         if entryId in invD:
             tD = invD[entryId]
             if "validation_report" in tD:
@@ -267,6 +272,7 @@ class CurrentHoldingsProvider(object):
         else:
             invD = self.__mU.doImport(urlTarget, fmt="json")
             logger.info("Loaded inventory from %s (%r)", urlTarget, len(invD))
+            #
             # previous method - save file locally
             if self.__storeCache:
                 logger.info("Fetch inventory from %s", urlTarget)
@@ -298,7 +304,7 @@ class CurrentHoldingsProvider(object):
         #
         if self.__storeCache:
             logger.info("Fetch ID list from %s", urlTarget)
-            ok = fU.get(urlTarget, fp)
+            fU.get(urlTarget, fp)
         #
         for k, v in tD.items():
             try:
@@ -326,7 +332,7 @@ class CurrentHoldingsProvider(object):
         #
         if self.__storeCache:
             logger.info("Fetch ID list from %s", urlTarget)
-            ok = fU.get(urlTarget, fp)
+            fU.get(urlTarget, fp)
         #
         for k, v in tD.items():
             try:
