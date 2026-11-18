@@ -47,7 +47,8 @@
 #   18-Nov-2026  dwp Build all remote URLs as archive server root + short link (same on the current and extended-id
 #                    archives): PDB_REPO_URL may name the server root or its "pub" dir (both work), holdings come
 #                    from the holdings short links; normalize entry id case by format (upper case short ids,
-#                    lower case extended ids) when matching holdings; tidy up TODOs
+#                    lower case extended ids) when matching holdings; tidy up TODOs; check the archive itself (not the
+#                    holdings) for inputPathList validation reports; local discovery also finds extended-id entry files
 #
 # TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load (via "inputPathList").
 #       If need to include a validation report, make sure it is in the same directory as the specified local input mmCIF structure file path.
@@ -67,6 +68,7 @@ __license__ = "Apache 2.0"
 
 import logging
 import os
+import re
 import time
 
 from rcsb.utils.io.HashableDict import HashableDict
@@ -79,6 +81,9 @@ from rcsb.utils.repository.RemovedHoldingsProvider import RemovedHoldingsProvide
 from rcsb.utils.validation.ValidationReportAdapter import ValidationReportAdapter
 
 logger = logging.getLogger(__name__)
+
+# Local entry file names: short (4-char) or extended ("pdb_" + 8 chars) PDB id, e.g. "4hhb.cif.gz" or "pdb_00004hhb.cif"
+LOCAL_ENTRY_FILE_PATTERN = re.compile(r"^(?:[^.]{4}|pdb_[^.]{8})\.cif(?:\.gz)?$", re.IGNORECASE)
 
 
 def toCifWrapper(xrt):
@@ -276,16 +281,11 @@ class RepositoryProvider(object):
                     if self.__fU.isLocal(locator):
                         # Assume validation report is in same directory as structure file
                         mergeLocator = os.path.join(ldir, idCode + "_validation.cif.gz")
-                        if mergeLocator and self.__fU.exists(mergeLocator):
-                            hasValidationData = True
                     else:
+                        # Validation report short link; checked on the archive itself (HTTP HEAD), as the holdings may lag behind
                         mergeLocator = self.__getLocatorRemote("vrpt", idCode)
-                        # TODO: The holdings inventory may lag behind newly added validation reports (which are then skipped)
-                        if not self.__chP:
-                            logger.info("Initializing CurrentHoldingsProvider")
-                            self.__chP = CurrentHoldingsProvider(self.__topCachePath, **self.__kwD)
-                        if self.__chP.hasValidationReportData(idCode):
-                            hasValidationData = True
+                    if mergeLocator and self.__fU.exists(mergeLocator):
+                        hasValidationData = True
                     #
                     if not hasValidationData:
                         logger.warning("Validation file not found: %s", mergeLocator)
@@ -481,7 +481,7 @@ class RepositoryProvider(object):
             elif contentType in ["bird_chem_comp"]:
                 pth = os.path.join(self.__getRepoLocalPath(contentType), idCode[-1], idCode + ".cif")
             elif contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
-                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel + ".cif.gz")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[-3:-1], idCodel + ".cif.gz")
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
@@ -489,7 +489,7 @@ class RepositoryProvider(object):
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             elif contentType in ["vrpt"]:
-                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel, idCodel + "_validation.cif.gz")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[-3:-1], idCodel, idCodel + "_validation.cif.gz")
             else:
                 logger.warning("Unsupported local contentType %s", contentType)
         except Exception as e:
@@ -787,12 +787,12 @@ class RepositoryProvider(object):
                 if "REMOVE" in root:
                     continue
                 for fn in files:
-                    if (fn.endswith(".cif.gz") and len(fn) == 11) or (fn.endswith(".cif") and len(fn) == 8):
+                    if LOCAL_ENTRY_FILE_PATTERN.match(fn):
                         locator = os.path.join(root, fn)
                         kwD = HashableDict({})
                         oL = [HashableDict({"locator": locator, "fmt": "mmcif", "kwargs": kwD})]
                         for mergeContentType in mergeContentTypes:
-                            idCode = fn[:4] if fn and len(fn) >= 8 else None  # TODO: update for extended IDs
+                            idCode = fn.split(".")[0]
                             mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
                             if mergeLocator:
                                 oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
@@ -846,7 +846,7 @@ class RepositoryProvider(object):
                 if "REMOVE" in root:
                     continue
                 for name in files:
-                    if (name.endswith(".cif.gz") and len(name) == 11) or (name.endswith(".cif") and len(name) == 8):
+                    if LOCAL_ENTRY_FILE_PATTERN.match(name):
                         pathList.append(os.path.join(root, name))
         return dataList, pathList, []
 
