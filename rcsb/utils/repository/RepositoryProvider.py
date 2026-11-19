@@ -38,7 +38,24 @@
 #                    Add support for inputPathList argument with REMOTE loading to enable explicit specification of
 #                    local and remote input file paths (e.g. non-archive files)
 #   24-Apr-2025   bv Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
+#   13-Jul-2026  dwp Use shortlink URL for accessing structure files (instead of fully-formed hashed archive paths);
+#                    Update code for providing an inputPathList instead of a list of ID codes (useful for manual testing)
+#   19-Oct-2026  dwp Only merge validation reports for inputPathList entries that have one (checked via file existence for local
+#                    paths, and via CurrentHoldingsProvider for remote paths); entries without one now load structure-only
+#                    instead of failing in __mergeContainers()
 #   26-Oct-2026  dwp Log the vrpt category removals once per entry at DEBUG level (instead of once per category at INFO)
+#   18-Nov-2026  dwp Build all remote URLs as archive server root + short link (same on the current and extended-id
+#                    archives): PDB_REPO_URL may name the server root or its "pub" dir (both work), holdings come
+#                    from the holdings short links; normalize entry id case by format (upper case short ids,
+#                    lower case extended ids) when matching holdings; tidy up TODOs; check the archive itself (not the
+#                    holdings) for inputPathList validation reports; local discovery also finds extended-id entry files
+#
+# TODO: Remove "local" code and replace with solely the option of reading in a list of local/remote paths to load (via "inputPathList").
+#       If need to include a validation report, make sure it is in the same directory as the specified local input mmCIF structure file path.
+#       OTHER QUESTION--Do we ever think we will want to use other "mergeContentTypes" than "vrpt"? (at least for local loads)?
+#                       We may need it for bird chem comp core locally...so need to consider this when making above change.
+#       See [reverted] prev. attempt: https://github.com/rcsb/py-rcsb_utils_repository/pull/24
+#       And: https://github.com/rcsb/py-rcsb_utils_repository/commit/c7d025e092f611f38d2f5739479c53f1e3e6fd59
 ##
 """
 Utilities for scanning and accessing data in PDBx/mmCIF data in common repository file systems or via remote repository services.
@@ -51,17 +68,22 @@ __license__ = "Apache 2.0"
 
 import logging
 import os
+import re
 import time
 
 from rcsb.utils.io.HashableDict import HashableDict
 from rcsb.utils.io.MarshalUtil import MarshalUtil
 from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.multiproc.MultiProcUtil import MultiProcUtil
+from rcsb.utils.repository.RepositoryHelper import DEFAULT_ARCHIVE_ROOT_URL, getRepositoryRootUrl, getHoldingsUrl, normalizeEntryId
 from rcsb.utils.repository.CurrentHoldingsProvider import CurrentHoldingsProvider
 from rcsb.utils.repository.RemovedHoldingsProvider import RemovedHoldingsProvider
 from rcsb.utils.validation.ValidationReportAdapter import ValidationReportAdapter
 
 logger = logging.getLogger(__name__)
+
+# Local entry file names: short (4-char) or extended ("pdb_" + 8 chars) PDB id, e.g. "4hhb.cif.gz" or "pdb_00004hhb.cif"
+LOCAL_ENTRY_FILE_PATTERN = re.compile(r"^(?:[^.]{4}|pdb_[^.]{8})\.cif(?:\.gz)?$", re.IGNORECASE)
 
 
 def toCifWrapper(xrt):
@@ -95,17 +117,17 @@ class RepositoryProvider(object):
         self.__configName = self.__cfgOb.getDefaultSectionName()
         #
         self.__discoveryMode = discoveryMode if discoveryMode else self.__cfgOb.get("DISCOVERY_MODE", sectionName=self.__configName, default="local")
-        self.__baseUrlPDB = self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
-        self.__fallbackUrlPDB = self.__cfgOb.getPath("PDB_REPO_FALLBACK_URL", sectionName=self.__configName, default="https://files.wwpdb.org/pub")
-        # self.__baseUrlPDBDev = self.__cfgOb.getPath("PDBDEV_REPO_URL", sectionName=self.__configName, default="https://pdb-dev.wwpdb.org")
+        # Archive server roots (e.g. "https://files.wwpdb.org"): all remote content is addressed by short link, which are the
+        # same on the current and the extended-id archive. A configured URL ending in "/pub" (current archive configs) also works.
+        self.__baseUrlPDB = getRepositoryRootUrl(self.__cfgOb.getPath("PDB_REPO_URL", sectionName=self.__configName, default=DEFAULT_ARCHIVE_ROOT_URL))
+        logger.info("PDB archive root %r", self.__baseUrlPDB)
         #
         self.__baseUrlCSM = self.__cfgOb.getPath("PDBX_COMP_MODEL_REPO_PATH", sectionName=self.__configName)
 
+        # IHM holdings providers get the same arguments with repoType="pdb_ihm" and switch to the pdb_ihm short links themselves
         self.__kwD = {
-            "holdingsTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "holdings"),
-            "holdingsFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "holdings"),
-            "updateTargetUrl": os.path.join(self.__baseUrlPDB, "pdb", "data", "status", "latest"),
-            "updateFallbackUrl": os.path.join(self.__fallbackUrlPDB, "pdb", "data", "status", "latest"),
+            "holdingsTargetUrl": getHoldingsUrl(self.__baseUrlPDB, "pdb"),
+            "refHoldingsTargetUrl": os.path.join(getHoldingsUrl(self.__baseUrlPDB, "refdata"), "refdata_id_list.json.gz"),
             "filterType": "assign-dates",
         }
         #
@@ -152,6 +174,7 @@ class RepositoryProvider(object):
         excludeIdsSet = set(excludeIds)
 
         if inputPathList:
+            logger.info("Getting locator object list with input inputPathList (len %d), first item: %r", len(inputPathList), inputPathList[0])
             locatorList = self.__getLocatorObjListWithInput(contentType, inputPathList=inputPathList, mergeContentTypes=mergeContentTypes)
         else:
             locatorList = self.__getLocatorList(contentType, inputPathList=inputPathList, inputIdCodeList=inputIdCodeList, mergeContentTypes=mergeContentTypes)
@@ -250,12 +273,26 @@ class RepositoryProvider(object):
                 if isinstance(locator, str):
                     kwD = HashableDict({})
                     oL = [HashableDict({"locator": locator, "fmt": "mmcif", "kwargs": kwD})]
-                    for mergeContentType in mergeContentTypes:
-                        _, fn = os.path.split(locator)
-                        idCode = fn[:4] if fn and len(fn) >= 8 else None
-                        mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
-                        if mergeLocator:
-                            oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
+                    mergeLocator = None
+                    hasValidationData = False
+                    # Only handle "vrpt" for local test loads
+                    ldir, fn = os.path.split(locator)
+                    idCode = fn.split(".")[0]
+                    if self.__fU.isLocal(locator):
+                        # Assume validation report is in same directory as structure file
+                        mergeLocator = os.path.join(ldir, idCode + "_validation.cif.gz")
+                    else:
+                        # Validation report short link; checked on the archive itself (HTTP HEAD), as the holdings may lag behind
+                        mergeLocator = self.__getLocatorRemote("vrpt", idCode)
+                    if mergeLocator and self.__fU.exists(mergeLocator):
+                        hasValidationData = True
+                    #
+                    if not hasValidationData:
+                        logger.warning("Validation file not found: %s", mergeLocator)
+                    #
+                    if mergeLocator and hasValidationData:
+                        logger.info("Merging %s with %s", locator, mergeLocator)
+                        oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
                     lObj = tuple(oL)
                 else:
                     logger.error("Unexpected output locator type %r", locator)
@@ -444,7 +481,7 @@ class RepositoryProvider(object):
             elif contentType in ["bird_chem_comp"]:
                 pth = os.path.join(self.__getRepoLocalPath(contentType), idCode[-1], idCode + ".cif")
             elif contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
-                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel + ".cif.gz")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[-3:-1], idCodel + ".cif.gz")
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
                 pth = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
@@ -452,7 +489,7 @@ class RepositoryProvider(object):
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             elif contentType in ["vrpt"]:
-                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[1:3], idCodel, idCodel + "_validation.cif.gz")
+                pth = os.path.join(self.__getRepoLocalPath(contentType), idCodel[-3:-1], idCodel, idCodel + "_validation.cif.gz")
             else:
                 logger.warning("Unsupported local contentType %s", contentType)
         except Exception as e:
@@ -467,40 +504,32 @@ class RepositoryProvider(object):
         uri = None
         _ = repositoryLayout
         try:
-            idCodel = idCode.lower()
-            if contentType == "bird":
-                # /pdb/refdata/bird/prd/1/
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "prd", idCode[-1], idCode + ".cif")
-            elif contentType == "bird_family":
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "family", idCode[-1], idCode + ".cif")
-            elif contentType in ["bird_chem_comp"]:
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "bird", "prdcc", idCode[-1], idCode + ".cif")
+            if contentType in ["bird", "bird_chem_comp", "bird_family"]:
+                # <archive root>/birds/download/PRD_000006.cif
+                # <archive root>/birds/download/PRDCC_000105.cif
+                # <archive root>/birds/download/FAM_000079.cif
+                uri = os.path.join(self.__baseUrlPDB, "birds", "download", idCode + ".cif")  # idCode/filename is case-insensitive
+            #
             elif contentType in ["chem_comp", "chem_comp_core"]:
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "refdata", "chem_comp", idCode[-1], idCode, idCode + ".cif")
+                # <archive root>/ligands/download/ATP.cif
+                uri = os.path.join(self.__baseUrlPDB, "ligands", "download", idCode + ".cif")  # idCode/filename is case-insensitive
             #
-            elif contentType in ["pdbx", "pdbx_core"]:
-                # pdb/data/structures/divided/mmCIF
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "divided", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
+            elif contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
+                # <archive root>/download/pdb_00004hhb.cif.gz (or 4hhb.cif.gz on the current archive) - Released PDB
+                # <archive root>/download/pdb_000021gs.cif.gz - Obsolete PDB
+                uri = os.path.join(self.__baseUrlPDB, "download", idCode + ".cif.gz")  # idCode/filename is case-insensitive
             elif contentType in ["vrpt", "validation_report"]:
-                # /pdb/validation_reports/
-                # https://files.wwpdb.org/pub/pdb/validation_reports/00/100d/100d_validation.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "validation_reports", idCodel[1:3], idCodel, idCodel + "_validation.cif.gz")
-                # logger.info("uri %r", uri)
+                # <archive root>/validation/download/pdb_0000100d_validation.cif.gz
+                uri = os.path.join(self.__baseUrlPDB, "validation", "download", idCode + "_validation.cif.gz")  # idCode/filename is case-insensitive
             #
-            elif contentType in ["pdbx_obsolete"]:
-                # pdb/data/structures/obsolete/mmCIF/
-                uri = os.path.join(self.__baseUrlPDB, "pdb", "data", "structures", "obsolete", "mmCIF", idCodel[1:3], idCodel + ".cif.gz")
             elif contentType in ["bird_consolidated", "bird_chem_comp_core"]:
-                uri = os.path.join(self.__getRepoLocalPath(contentType), idCode + ".cif")
+                # TODO: Transition these contentTypes to fetch from remote if possible (not urgent, but eventually)
+                uri = os.path.join(self.__getRepoLocalPath(contentType), idCode.upper() + ".cif")
             #
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-                # File path template is:  <topRepoPath>/data/entries/<2-char-hash>/<4-char-id>/structures/<4-char-id>.cif.gz
-                uri = os.path.join(self.__baseUrlPDB, "pdb_ihm", "data", "entries", idCodel[1:3], idCodel, "structures", idCodel + ".cif.gz")
+                # <archive root>/download/pdb_00008zz1.cif.gz - IHM
+                uri = os.path.join(self.__baseUrlPDB, "download", idCode + ".cif.gz")  # idCode/filename is case-insensitive
             #
-            # elif contentType in ["ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
-            #     # https://pdb-dev.wwpdb.org/cif/PDBDEV_00000001.cif
-            #     uri = os.path.join(self.__baseUrlPDBDev, "cif", idCode + ".cif")
-
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 pass
             else:
@@ -515,19 +544,21 @@ class RepositoryProvider(object):
         idCode = None
         try:
             bn = os.path.basename(pth)
-            if contentType in ["pdbx", "pdbx_core", "pdbx_obsolete", "bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
-                idCode = bn.split(".")[0]
+            if contentType in ["pdbx", "pdbx_core", "pdbx_obsolete"]:
+                idCode = normalizeEntryId(bn.split(".")[0])
+            elif contentType in ["bird", "bird_family", "chem_comp", "chem_comp_core", "bird_consolidated", "bird_chem_comp_core"]:
+                idCode = bn.split(".")[0].upper()
             elif contentType in ["pdbx_ihm", "pdbx_ihm_core", "ihm", "ihm_core", "ihm_dev", "ihm_dev_core", "ihm_dev_full"]:
                 tC = bn.split(".")[0]
-                idCode = "_".join(tC.split("_")[:2])
+                idCode = normalizeEntryId("_".join(tC.split("_")[:2]))
             elif contentType in ["pdb_distro", "da_internal", "status_history"]:
                 idCode = None
             elif contentType in ["vrpt"]:
                 tC = bn.split(".")[0]
-                idCode = tC.split("_")[0]
+                # e.g. "pdb_00004hhb_validation" or "4hhb_validation"
+                idCode = normalizeEntryId(tC[: -len("_validation")] if tC.lower().endswith("_validation") else tC.split("_")[0])
             else:
                 logger.warning("Unsupported contentType %s", contentType)
-            idCode = idCode.upper() if idCode else None
         except Exception as e:
             logger.exception("Failing for %r %r with %s", contentType, pth, str(e))
         return idCode
@@ -582,9 +613,7 @@ class RepositoryProvider(object):
             logger.info("original tIdL length (%r)", len(tIdL))
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
-                # idCodeList = [t.upper() for t in idCodeList]
-                # tIdL = list(set(tIdL).intersection(idCodeList))
+                tIdL = [normalizeEntryId(idCode) for idCode in idCodeList if normalizeEntryId(idCode) in tIdD]
                 logger.debug("idCodeList selected tIdL: %r", tIdL)
                 logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
                 if len(tIdL) > 10:
@@ -616,7 +645,7 @@ class RepositoryProvider(object):
             tIdL = self.__rhP.getEntryByStatus("OBS")
             if idCodeList:
                 tIdD = dict.fromkeys(tIdL, True)
-                tIdL = [idCode.upper() for idCode in idCodeList if idCode.upper() in tIdD]
+                tIdL = [normalizeEntryId(idCode) for idCode in idCodeList if normalizeEntryId(idCode) in tIdD]
                 logger.info("idCodeList selected: %r", tIdL)
             #
             for tId in tIdL:
@@ -758,12 +787,12 @@ class RepositoryProvider(object):
                 if "REMOVE" in root:
                     continue
                 for fn in files:
-                    if (fn.endswith(".cif.gz") and len(fn) == 11) or (fn.endswith(".cif") and len(fn) == 8):
+                    if LOCAL_ENTRY_FILE_PATTERN.match(fn):
                         locator = os.path.join(root, fn)
                         kwD = HashableDict({})
                         oL = [HashableDict({"locator": locator, "fmt": "mmcif", "kwargs": kwD})]
                         for mergeContentType in mergeContentTypes:
-                            idCode = fn[:4] if fn and len(fn) >= 8 else None
+                            idCode = fn.split(".")[0]
                             mergeLocator = self.__getLocator(mergeContentType, idCode, checkExists=True) if idCode else None
                             if mergeLocator:
                                 oL.append(HashableDict({"locator": mergeLocator, "fmt": "mmcif", "kwargs": kwD}))
@@ -817,7 +846,7 @@ class RepositoryProvider(object):
                 if "REMOVE" in root:
                     continue
                 for name in files:
-                    if (name.endswith(".cif.gz") and len(name) == 11) or (name.endswith(".cif") and len(name) == 8):
+                    if LOCAL_ENTRY_FILE_PATTERN.match(name):
                         pathList.append(os.path.join(root, name))
         return dataList, pathList, []
 
@@ -1276,8 +1305,9 @@ class RepositoryProvider(object):
 
         File path template is:  <topRepoPath>/data/entries/<2-char-hash>/<4-char-id>/structures/<4-char-id>.cif.gz
 
-        Example full public path: https://files.wwpdb.org/pub/pdb_ihm/data/entries/zz/8zz1/structures/8zz1.cif.gz
-        Example pre-release path: http://<pre...org>/pdb_ihm/data/entries/zz/8zz1/structures/8zz1.cif.gz
+        Example full public path: https://files-beta.wwpdb.org/pub/wwpdb/pdb_ihm/data/entries/zz/pdb_00008zz1/structures/pdb_00008zz1.cif.gz
+        Example shortlink path:   https://files-beta.wwpdb.org/download/pdb_00008zz1.cif.gz (same short link on both archives,
+                                  e.g. https://files.wwpdb.org/download/8zz1.cif.gz on the current archive)
         """
         uL = []
         try:
@@ -1290,7 +1320,7 @@ class RepositoryProvider(object):
             #
             tIdL = []
             if idCodeList:
-                tIdL = [t.lower() for t in idCodeList if t.upper() in ihmChPD]
+                tIdL = [t.lower() for t in idCodeList if normalizeEntryId(t) in ihmChPD]
                 logger.debug("idCodeList selected tIdL: %r", tIdL)
                 logger.info("idCodeList selected tIdL length (%r)", len(tIdL))
                 if len(tIdL) > 10:

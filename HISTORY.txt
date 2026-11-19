@@ -50,3 +50,8 @@
 24-Apr-2025 - V0.50 Add a temporary fix to handle merging of duplicated and partially populated data categories in mmCIF validation reports
  2-Dec-2025 - V0.51 Switch to 'pyproject.toml' file and hatch build system, and update pipelines to Python 3.13
 26-Oct-2026 - V0.52 Log the vrpt category removals in RepositoryProvider at DEBUG level (instead of INFO) to reduce ETL log volume
+18-Nov-2026 - V0.53 Support the extended-ID (beta) archive alongside the current archive: all remote access (entries,
+                    validation reports, holdings, BIRD families) through archive short links built from the server root
+                    of PDB_REPO_URL (new RepositoryHelper), the same on both archives (rcsb/jshortlink#14); entry ID case
+                    by ID format; both in-silico model path layouts; only merge validation reports for inputPathList
+                    entries that have one; remove UpdateHoldingsProvider

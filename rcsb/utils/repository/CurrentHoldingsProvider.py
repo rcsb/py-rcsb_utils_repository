@@ -10,6 +10,10 @@
 #                    Add validation coefficients to list of repository_content_types
 #   16-Oct-2024  dwp Remove usage of EDMAPS holdings file
 #   28-Jan-2025  dwp Add support for IHM holdings file loading
+#   18-Nov-2026  dwp Default to the archive's holdings short links (same on the current and extended-id archives),
+#                    with the reference data ID list from its own short link (refHoldingsTargetUrl; any full URL
+#                    can still be passed); normalize entry id case by format in lookups (upper case short ids,
+#                    lower case extended ids)
 #
 ##
 """Provide inventory of current repository content.
@@ -23,6 +27,7 @@ import pytz
 
 from rcsb.utils.io.FileUtil import FileUtil
 from rcsb.utils.io.MarshalUtil import MarshalUtil
+from rcsb.utils.repository.RepositoryHelper import DEFAULT_ARCHIVE_ROOT_URL, getHoldingsUrl, getRepoTypeHoldingsUrl, normalizeEntryId
 from rcsb.utils.struct.EntryInfoProvider import EntryInfoProvider
 
 logger = logging.getLogger(__name__)
@@ -37,28 +42,22 @@ class CurrentHoldingsProvider(object):
         self.__storeCache = kwargs.get("storeCache", False)
         self.__repoType = kwargs.get("repoType", "pdb")  # can be set to "pdb" or "pdb_ihm"
         #
-        baseUrl = kwargs.get("holdingsTargetUrl", "https://files.wwpdb.org/pub/pdb/holdings")
-        fallbackUrl = kwargs.get("holdingsFallbackUrl", "https://files.wwpdb.org/pub/pdb/holdings")
-        #
-        if self.__repoType == "pdb_ihm":
-            baseUrl = baseUrl.replace("pdb/holdings", "pdb_ihm/holdings")
-            fallbackUrl = fallbackUrl.replace("pdb/holdings", "pdb_ihm/holdings")
+        # Holdings directory: the holdings short link by default (e.g. "https://files.wwpdb.org/holdings/download/pdb",
+        # switched to "pdb_ihm" for IHM), or any directory URL the caller passes
+        baseUrl = getRepoTypeHoldingsUrl(kwargs.get("holdingsTargetUrl", getHoldingsUrl(DEFAULT_ARCHIVE_ROOT_URL, "pdb")), self.__repoType)
         #
         entryUrlContent = os.path.join(baseUrl, "current_file_holdings.json.gz")
-        entryUrlFallbackContent = os.path.join(fallbackUrl, "current_file_holdings.json.gz")
         entryUrlIds = os.path.join(baseUrl, "released_structures_last_modified_dates.json.gz")
-        entryUrlFallbackIds = os.path.join(fallbackUrl, "released_structures_last_modified_dates.json.gz")
         #
         self.__mU = MarshalUtil(workPath=self.__dirPath)
         #
-        self.__invD = self.__reloadEntryContent(entryUrlContent, entryUrlFallbackContent, self.__dirPath, useCache=useCache)
-        self.__idD = self.__reloadEntryIds(entryUrlIds, entryUrlFallbackIds, self.__dirPath, useCache=useCache)
+        self.__invD = self.__reloadEntryContent(entryUrlContent, self.__dirPath, useCache=useCache)
+        self.__idD = self.__reloadEntryIds(entryUrlIds, self.__dirPath, useCache=useCache)
         self.__refD = {}
         #
         if self.__repoType != "pdb_ihm":
-            refdataUrlIds = os.path.join(baseUrl, "refdata_id_list.json.gz")
-            refdataUrlFallbackIds = os.path.join(fallbackUrl, "refdata_id_list.json.gz")
-            self.__refD = self.__reloadRefdataIds(refdataUrlIds, refdataUrlFallbackIds, self.__dirPath, useCache=useCache)
+            refdataUrlIds = kwargs.get("refHoldingsTargetUrl", os.path.join(getHoldingsUrl(DEFAULT_ARCHIVE_ROOT_URL, "refdata"), "refdata_id_list.json.gz"))
+            self.__refD = self.__reloadRefdataIds(refdataUrlIds, self.__dirPath, useCache=useCache)
         #
         # EntryInfoProvider must be cached before this class is invoked -
         self.__eiP = EntryInfoProvider(cachePath=self.__cachePath, useCache=True)
@@ -79,7 +78,7 @@ class CurrentHoldingsProvider(object):
     def hasEntryContentType(self, entryId, contentType):
         """Return if the current content types is available for the input entry identifier"""
         try:
-            return contentType in self.__invD[entryId.upper()]
+            return contentType in self.__invD[normalizeEntryId(entryId)]
         except Exception as e:
             logger.exception("Failing for %r with %s", entryId, str(e))
         return False
@@ -87,7 +86,7 @@ class CurrentHoldingsProvider(object):
     def getEntryContentTypes(self, entryId):
         """Return the current content types for the input entry identifier"""
         try:
-            return sorted(self.__invD[entryId.upper()].keys())
+            return sorted(self.__invD[normalizeEntryId(entryId)].keys())
         except Exception as e:
             logger.exception("Failing for %r with %s", entryId, str(e))
         return []
@@ -108,7 +107,7 @@ class CurrentHoldingsProvider(object):
     def getEntryContentTypePathList(self, entryId, contentType):
         """Return the current content types for the input entry identifier"""
         try:
-            return self.__invD[entryId.upper()][contentType]
+            return self.__invD[normalizeEntryId(entryId)][contentType]
         except Exception as e:
             logger.debug("Failing for %r %r with %s", entryId, contentType, str(e))
         return []
@@ -175,11 +174,12 @@ class CurrentHoldingsProvider(object):
         return self.__hasValidationReportData(self.__invD, entryId)
 
     def __hasValidationReportData(self, invD, entryId):
-        if entryId.upper() in invD:
-            tD = invD[entryId.upper()]
+        entryId = normalizeEntryId(entryId)
+        if entryId in invD:
+            tD = invD[entryId]
             if "validation_report" in tD:
                 for pth in tD["validation_report"]:
-                    if pth[-7:] == ".cif.gz":
+                    if pth.endswith(".cif.gz"):
                         return True
         return False
 
@@ -257,7 +257,7 @@ class CurrentHoldingsProvider(object):
             assemD[entryId] = list(assemS)
         return ctD, assemD
 
-    def __reloadEntryContent(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+    def __reloadEntryContent(self, urlTarget, dirPath, useCache=True):
         invD = {}
         fU = FileUtil()
         fn = fU.getFileName(urlTarget)
@@ -272,16 +272,11 @@ class CurrentHoldingsProvider(object):
         else:
             invD = self.__mU.doImport(urlTarget, fmt="json")
             logger.info("Loaded inventory from %s (%r)", urlTarget, len(invD))
-            if len(invD) == 0:
-                invD = self.__mU.doImport(urlFallbackTarget, fmt="json")
-                logger.info("Loaded fallback inventory from %s (%r)", urlFallbackTarget, len(invD))
             #
             # previous method - save file locally
             if self.__storeCache:
                 logger.info("Fetch inventory from %s", urlTarget)
                 ok = fU.get(urlTarget, fp)
-                if not ok:
-                    ok = fU.get(urlFallbackTarget, fp)
                 if ok:
                     ofp = fp[:-3] if fp.endswith(".gz") else fp
                     ok = self.__mU.doExport(ofp, invD, fmt="json", indent=3)
@@ -290,7 +285,7 @@ class CurrentHoldingsProvider(object):
                         fU.compress(ofp, fp)
         return invD
 
-    def __reloadEntryIds(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+    def __reloadEntryIds(self, urlTarget, dirPath, useCache=True):
         tD = {}
         idD = {}
         fU = FileUtil()
@@ -306,15 +301,10 @@ class CurrentHoldingsProvider(object):
         else:
             tD = self.__mU.doImport(urlTarget, fmt="json")
             logger.info("Loaded ID list from %s (%r)", urlTarget, len(tD))
-            if len(tD) == 0:
-                tD = self.__mU.doImport(urlFallbackTarget, fmt="json")
-                logger.info("Loaded fallback ID list from %s (%r)", urlFallbackTarget, len(tD))
         #
         if self.__storeCache:
             logger.info("Fetch ID list from %s", urlTarget)
-            ok = fU.get(urlTarget, fp)
-            if not ok:
-                ok = fU.get(urlFallbackTarget, fp)
+            fU.get(urlTarget, fp)
         #
         for k, v in tD.items():
             try:
@@ -325,7 +315,7 @@ class CurrentHoldingsProvider(object):
         sTupL = sorted(idD.items(), key=lambda item: item[1])
         return {k: v for k, v in sTupL}
 
-    def __reloadRefdataIds(self, urlTarget, urlFallbackTarget, dirPath, useCache=True):
+    def __reloadRefdataIds(self, urlTarget, dirPath, useCache=True):
         tD = {}
         idD = {}
         fU = FileUtil()
@@ -339,15 +329,10 @@ class CurrentHoldingsProvider(object):
         else:
             tD = self.__mU.doImport(urlTarget, fmt="json")
             logger.info("Loaded ID list from %s (%r)", urlTarget, len(tD))
-            if len(tD) == 0:
-                tD = self.__mU.doImport(urlFallbackTarget, fmt="json")
-                logger.info("Loaded fallback ID list from %s (%r)", urlFallbackTarget, len(tD))
         #
         if self.__storeCache:
             logger.info("Fetch ID list from %s", urlTarget)
-            ok = fU.get(urlTarget, fp)
-            if not ok:
-                ok = fU.get(urlFallbackTarget, fp)
+            fU.get(urlTarget, fp)
         #
         for k, v in tD.items():
             try:
